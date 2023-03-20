@@ -1,22 +1,28 @@
 from argparse import ArgumentParser
+import requests
 import pytchat
-from obswebsocket import obsws, requests
+import obswebsocket
 import time
+import json
+import simpleaudio
 
 # obswebsocket
 host = "localhost"
 port = 4444
 password = "GKzsYMK574JexVLr"
-ws = obsws(host, port, password)
+ws = obswebsocket.obsws(host, port, password)
 ws.connect()
 
 # pytchat
 chat = pytchat.create(video_id="U5uMBS4kBuY")
 
+# voicevox
+speaker = 1  # ずんだもん
+
 
 def obsTextChange(source_name: str, strtext: str):
     ws.call(
-        requests.SetSourceSettings(
+        obswebsocket.requests.SetSourceSettings(
             sourceName=source_name, sourceSettings={"text": strtext}
         )
     )
@@ -45,12 +51,29 @@ def think(author, prompt):
     return answer
 
 
-def speak(text):
-    # TODO: OBSの字幕変更
-    # TODO: VOICEVOXで回答を喋らせる
-    obsTextChange("zundamon_zimaku", text)
+def tts(text):
+    # 音声合成
+    res1 = requests.post(
+        "http://localhost:50021/audio_query",
+        params={"text": text, "speaker": speaker},
+    )
+    res2 = requests.post(
+        "http://localhost:50021/synthesis",
+        params={"speaker": speaker},
+        data=json.dumps(res1.json()),
+    )
+    return res2.content
+
+
+def speak(text, wav):
     print(text)
-    time.sleep(3.0)
+
+    # OBSの字幕変更
+    obsTextChange("zundamon_zimaku", text)
+
+    # 音声再生
+    play_obj = simpleaudio.play_buffer(wav, 1, 2, 24000)
+    play_obj.wait_done()
 
 
 def main(args) -> None:
@@ -59,9 +82,19 @@ def main(args) -> None:
         ret, author, prompt = listen()
         if not ret:
             continue
-        speak("「" + prompt + "」")
+        print("prompt:", prompt)
+
         answer = think(author, prompt)
-        speak(answer)
+        print("answer:", answer)
+
+        prompt_wav = tts(prompt)
+        answer_wav = tts(answer)
+        print("tts done")
+
+        speak("「" + prompt + "」", prompt_wav)
+        time.sleep(0.5)
+        speak(answer, answer_wav)
+        print("spoken")
 
 
 def parse_args():
