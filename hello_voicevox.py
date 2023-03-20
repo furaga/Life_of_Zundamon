@@ -1,78 +1,39 @@
-import dataclasses
+import requests
+import argparse
 import json
-import logging
-from argparse import ArgumentParser
-from pathlib import Path
-from typing import Tuple
 
-import voicevox_core
-from voicevox_core import AccelerationMode, AudioQuery, VoicevoxCore
+# VOICEVOXをインストールしたPCのホスト名を指定してください
+HOSTNAME='XXXXXXXX'
 
-SPEAKER_ID = 0
+# コマンド引数
+parser = argparse.ArgumentParser(description='VOICEVOX API')
+parser.add_argument('-t','--text',  type=str, required=True, help='読み上げるテ>キスト')
+parser.add_argument('-id','--speaker_id' , type=int, default=2, help='話者ID')
+parser.add_argument('-f','--filename', type=str, default='voicevox', help='ファ>イル名')
+parser.add_argument('-o','--output_path',  type=str, default='.', help='出力パス名')
 
+# コマンド引数分析
+args = parser.parse_args()
+input_texts = args.text
+speaker     = args.speaker_id
+filename    = args.filename
+output_path = args.output_path
 
-def main() -> None:
-    logging.basicConfig(
-        format="[%(levelname)s] %(filename)s: %(message)s", level="DEBUG"
-    )
-    logger = logging.getLogger(__name__)
+#「 。」で文章を区切り１行ずつ音声合成させる
+texts = input_texts.split('。')
 
-    (acceleration_mode, open_jtalk_dict_dir, text, out) = parse_args()
+# 音声合成処理のループ
+for i, text in enumerate(texts):
+    # 文字列が空の場合は処理しない
+    if text == '': continue
 
-    logger.debug("%s", f"{voicevox_core.METAS=}")
-    logger.debug("%s", f"{voicevox_core.SUPPORTED_DEVICES=}")
-
-    logger.info("%s", f"Initializing ({acceleration_mode=}, {open_jtalk_dict_dir=})")
-    core = VoicevoxCore(
-        acceleration_mode=acceleration_mode, open_jtalk_dict_dir=open_jtalk_dict_dir
-    )
-
-    logger.debug("%s", f"{core.is_gpu_mode=}")
-
-    logger.info("%s", f"Loading model {SPEAKER_ID}")
-    core.load_model(SPEAKER_ID)
-
-    logger.debug("%s", f"{core.is_model_loaded(0)=}")
-
-    logger.info("%s", f"Creating an AudioQuery from {text!r}")
-    audio_query = core.audio_query(text, SPEAKER_ID)
-
-    logger.info("%s", f"Synthesizing with {display_as_json(audio_query)}")
-    wav = core.synthesis(audio_query, SPEAKER_ID)
-
-    out.write_bytes(wav)
-    logger.info("%s", f"Wrote `{out}`")
-
-
-def parse_args() -> Tuple[AccelerationMode, Path, str, Path]:
-    argparser = ArgumentParser()
-    argparser.add_argument(
-        "--mode",
-        default="AUTO",
-        type=AccelerationMode,
-        help='モード ("AUTO", "CPU", "GPU")',
-    )
-    argparser.add_argument(
-        "open_jtalk_dict_dir",
-        type=Path,
-        help="Open JTalkの辞書ディレクトリ",
-    )
-    argparser.add_argument(
-        "text",
-        help="読み上げさせたい文章",
-    )
-    argparser.add_argument(
-        "out",
-        type=Path,
-        help="出力wavファイルのパス",
-    )
-    args = argparser.parse_args()
-    return (args.mode, args.open_jtalk_dict_dir, args.text, args.out)
-
-
-def display_as_json(audio_query: AudioQuery) -> str:
-    return json.dumps(dataclasses.asdict(audio_query), ensure_ascii=False)
-
-
-if __name__ == "__main__":
-    main()
+    # audio_query (音声合成用のクエリを作成するAPI)
+    res1 = requests.post('http://' + HOSTNAME + ':50021/audio_query',
+                        params={'text': text, 'speaker': speaker})
+    # synthesis (音声合成するAPI)
+    res2 = requests.post('http://' + HOSTNAME + ':50021/synthesis',
+                        params={'speaker': speaker},
+                        data=json.dumps(res1.json()))
+    # wavファイルに書き込み
+    with open(output_path + '/' + filename + f'_%03d.wav' %i, mode='wb') as f:
+        f.write(res2.content)
