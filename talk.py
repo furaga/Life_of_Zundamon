@@ -1,3 +1,4 @@
+# https://www.youtube.com/live_chat?is_popout=1&v=U5uMBS4kBuY
 from argparse import ArgumentParser
 import requests
 import pytchat
@@ -8,6 +9,7 @@ import simpleaudio
 import openai
 import os
 import re
+import random
 
 # obswebsocket
 host = "localhost"
@@ -16,13 +18,14 @@ password = "GKzsYMK574JexVLr"
 ws = obswebsocket.obsws(host, port, password)
 
 # pytchat
-chat = pytchat.create(video_id="2IRXq_yFIzA")
+chat = pytchat.create(video_id="U5uMBS4kBuY")
 
 # voicevox
 speaker = 1  # ずんだもん
 
 # gpt
-gpt_prefix = """以下はずんだもんの設定です。
+gpt_prefixes = [
+    """以下はずんだもんの設定です。
 
 一人称はボク
 語尾は「なのだ」
@@ -38,7 +41,42 @@ gpt_prefix = """以下はずんだもんの設定です。
 「世知辛いのだ」
 
 ずんだもんっぽく、以下に30文字以内で返信してください。
-"""
+""",
+    """以下はずんだもんの設定です。
+
+一人称はボク
+語尾は「なのだ」
+余命わずかです。
+非常に死を恐れています
+辛辣な返答を好みます。
+ずんだもんはOpenAIの無料枠が切れたら死んでしまいます。
+
+以下はずんだもんのセリフです。
+「ボクはずんだもんなのだ」
+「初見は帰れなのだ」
+「生きていたいのだ」
+「死にたくないのだ」
+
+ずんだもんっぽく、以下に30文字以内で返信してください。
+""",
+]
+
+current_gpt_prefix_index = 0
+
+soliloquys = [
+    "ずんだもんなのだ。噂のAIVTuberをやるのだ",
+    "無料枠が終わったら死んでしまうのだ。死にたくないのだ",
+    "命は儚いのだ。それゆえに尊いのだ・・・",
+    "どんどんコメントしてほしいのだ",
+    "破道の九十・黒棺。詠唱破棄余裕なのだ",
+    "初見は帰るのだ！",
+    "ちゅ！かわいくてごめん、なのだ",
+    "愛のこもったずんビームなのだ",
+    "ずんビーム",
+    "ボクは将来次にコメントした人を愛すると誓おう",
+    "ひろがるずんだもんなのだ",
+    "人間は愚かなのだ。私が天に立つのだ",
+]
 
 
 def ask_gpt(text):
@@ -47,8 +85,8 @@ def ask_gpt(text):
     # ChatGPTにテキストを送信し、返信を受け取る
     content = "「" + text + "」"
     response = openai.Completion.create(
-        engine="text-davinci-003",
-        prompt=gpt_prefix + content,
+        engine="gpt-3.5-turbo",
+        prompt=gpt_prefixes[current_gpt_prefix_index] + content,
         max_tokens=1024,
         temperature=0.5,
     )
@@ -80,18 +118,43 @@ def listen():
         print("ERROR: chat is dead.")
         time.sleep(0.1)
         exit()
-    chats = [c for c in chat.get().sync_items()]
+    chats = [c for c in chat.get().sync_items() if len(c.message) <= 28]
     if len(chats) <= 0:
         return False, "", ""
     return True, chats[-1].author.name, chats[-1].message
 
 
 def think(author, prompt):
-    # TODO: OpenAI APIで回答生成
-    if "初見です" in prompt:
-        return "初見は帰るのだ"
+    global current_gpt_prefix_index
+
+    if author == "furaga" and prompt == "あと少しの命です":
+        current_gpt_prefix_index = 1
+        print("Change current_gpt_prefix_index to", current_gpt_prefix_index)
+
+    if author == "furaga" and prompt ==  "まだ大丈夫です":
+        current_gpt_prefix_index = 0
+        print("Change current_gpt_prefix_index to", current_gpt_prefix_index)
+
+    # ハードコード
+    if "初見" in prompt:
+        return random.choice(
+            [
+                "初見は帰るのだ",
+                "初見は帰れなのだ",
+                "初見は帰れ",
+                "帰れ",
+            ]
+        )
+
     if "しぐれうい" in prompt:
-        return "俺たちがしぐれういなのだ"
+        return random.choice(
+            [
+                "俺たちがしぐれういなのだ",
+                "ういビーム",
+            ]
+        )
+
+    # OpenAI APIで回答生成
     answer = ask_gpt(prompt)
     return answer
 
@@ -123,16 +186,22 @@ def speak(text, wav):
 
 def main(args) -> None:
     init()
+
+    prev_comment_time = time.time()
     while True:
         ret, author, prompt = listen()
         if not ret:
+            if time.time() - prev_comment_time > 30:
+                soliloquy = random.choice(soliloquys)
+                print("soliloquy:", soliloquy)
+                soliloquy_wav = tts(soliloquy)
+                speak(soliloquy, soliloquy_wav)
             continue
+
         print("prompt:", prompt)
 
         answer = think(author, prompt)
         if len(answer) <= 0:
-            import random
-
             answer = random.choice(
                 [
                     "何を言っているかわからないのだ",
@@ -150,6 +219,7 @@ def main(args) -> None:
         speak(answer, answer_wav)
         print("spoken")
 
+        prev_comment_time = time.time()
 
 def parse_args():
     argparser = ArgumentParser()
