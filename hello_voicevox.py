@@ -33,17 +33,16 @@ for i, text in enumerate(texts):
     since = time.time()
     # audio_query (音声合成用のクエリを作成するAPI)
     res1 = requests.post(
-        "http://" + HOSTNAME + ":50021/tts",
+        "http://" + HOSTNAME + ":50031/audio_query",
         params={"text": text, "speaker": speaker},
     )
 
-    print("audio_query", time.time() - since, res1.json())
-    exit()
+    print("audio_query", time.time() - since)
     since = time.time()
 
     # synthesis (音声合成するAPI)
     res2 = requests.post(
-        "http://" + HOSTNAME + ":50021/synthesis",
+        "http://" + HOSTNAME + ":50031/synthesis",
         params={"speaker": speaker},
         data=json.dumps(res1.json()),
     )
@@ -59,7 +58,9 @@ for i, text in enumerate(texts):
     print("save", time.time() - since)
     since = time.time()
 
-    simpleaudio.play_buffer(res2.content, 1, 2, 24000)
+    wav = simpleaudio.WaveObject.from_wave_file(out_path)
+    wav.play()
+#    simpleaudio.play_buffer(res2.content, 1, 2, 24000)
 
     print("speak", time.time() - since)
     since = time.time()
