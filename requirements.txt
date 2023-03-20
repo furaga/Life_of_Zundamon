@@ -1,3 +1,4 @@
 obs-websocket-py
 simpleaudio
 black
+requests
