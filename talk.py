@@ -5,19 +5,61 @@ import obswebsocket
 import time
 import json
 import simpleaudio
+import openai
+import os
+import re
 
 # obswebsocket
 host = "localhost"
 port = 4444
 password = "GKzsYMK574JexVLr"
 ws = obswebsocket.obsws(host, port, password)
-ws.connect()
 
 # pytchat
-chat = pytchat.create(video_id="U5uMBS4kBuY")
+chat = pytchat.create(video_id="2IRXq_yFIzA")
 
 # voicevox
 speaker = 1  # ずんだもん
+
+# gpt
+gpt_prefix = """以下はずんだもんの設定です。
+
+一人称はボク
+語尾は「なのだ」
+達観した思考をしています
+辛辣な返答を好みます。
+ずんだもんはOpenAIの無料枠が切れたら死んでしまいます。
+ずんだもんはときどき生への執着を感じさせる発言をします。
+
+以下はずんだもんのセリフです。
+「ボクはずんだもんなのだ」
+「初見は帰れなのだ」
+「いかんともしがたいのだ」
+「世知辛いのだ」
+
+ずんだもんっぽく、以下に30文字以内で返信してください。
+"""
+
+
+def ask_gpt(text):
+    text = re.sub("<@.+>", "", text)
+
+    # ChatGPTにテキストを送信し、返信を受け取る
+    content = "「" + text + "」"
+    response = openai.Completion.create(
+        engine="text-davinci-003",
+        prompt=gpt_prefix + content,
+        max_tokens=1024,
+        temperature=0.5,
+    )
+
+    # ChatGPTから返信を受け取ったテキストを取得する
+    print(response)
+    answer = response["choices"][0]["text"]
+    answer = re.sub(r"\s+", "", answer)
+    answer = answer.replace("「", "")
+    answer = answer.replace("」", "")
+    return answer
 
 
 def obsTextChange(source_name: str, strtext: str):
@@ -29,6 +71,7 @@ def obsTextChange(source_name: str, strtext: str):
 
 
 def init():
+    openai.api_key = os.environ["OPENAI_API_KEY"]
     ws.connect()
 
 
@@ -45,9 +88,11 @@ def listen():
 
 def think(author, prompt):
     # TODO: OpenAI APIで回答生成
-    if prompt == "初見です":
+    if "初見です" in prompt:
         return "初見は帰るのだ"
-    answer = prompt
+    if "しぐれうい" in prompt:
+        return "俺たちがしぐれういなのだ"
+    answer = ask_gpt(prompt)
     return answer
 
 
@@ -85,6 +130,15 @@ def main(args) -> None:
         print("prompt:", prompt)
 
         answer = think(author, prompt)
+        if len(answer) <= 0:
+            import random
+
+            answer = random.choice(
+                [
+                    "何を言っているかわからないのだ",
+                    "訳のわからないことを言うななのだ",
+                ]
+            )
         print("answer:", answer)
 
         prompt_wav = tts(prompt)
