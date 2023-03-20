@@ -10,15 +10,23 @@ import openai
 import os
 import re
 import random
+import argparse
+
+# コマンド引数
+parser = argparse.ArgumentParser(description="TALK")
+parser.add_argument("--obs_pass", type=str, required=True, help="OBS Websocketのパスワード")
+parser.add_argument("--chat_video_id", type=int, required=True, help="YouTubeの動画ID")
+parser.add_argument("--openai_api_key", type=str, required=True, help="OpenAIのAPI Key")
+args = parser.parse_args()
 
 # obswebsocket
 host = "localhost"
 port = 4444
-password = "GKzsYMK574JexVLr"
+password = args.obs_pass
 ws = obswebsocket.obsws(host, port, password)
 
 # pytchat
-chat = pytchat.create(video_id="U5uMBS4kBuY")
+chat = pytchat.create(video_id=args.chat_video_id)
 
 # voicevox
 speaker = 1  # ずんだもん
@@ -109,7 +117,7 @@ def obsTextChange(source_name: str, strtext: str):
 
 
 def init():
-    openai.api_key = os.environ["OPENAI_API_KEY"]
+    openai.api_key = args.openai_api_key
     ws.connect()
 
 
@@ -131,7 +139,7 @@ def think(author, prompt):
         current_gpt_prefix_index = 1
         print("Change current_gpt_prefix_index to", current_gpt_prefix_index)
 
-    if author == "furaga" and prompt ==  "まだ大丈夫です":
+    if author == "furaga" and prompt == "まだ大丈夫です":
         current_gpt_prefix_index = 0
         print("Change current_gpt_prefix_index to", current_gpt_prefix_index)
 
@@ -220,6 +228,7 @@ def main(args) -> None:
         print("spoken")
 
         prev_comment_time = time.time()
+
 
 def parse_args():
     argparser = ArgumentParser()

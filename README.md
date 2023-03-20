@@ -6,6 +6,7 @@ OpenAIの無料枠が切れたら命を終えるずんだもんを作りたい
 
 - OBS 28.1.2
 - [obs-websocket (4.9.1)](https://github.com/obsproject/obs-websocket/releases)
+- VOICEVOX 0.14.5
 
 # Setup (Powershell)
 
@@ -19,10 +20,16 @@ python -m pip install -U pip
 python -m pip install -r .\requirements.txt
 ```
 
-Download VOICEVOX CORE wheel from [here](https://github.com/VOICEVOX/voicevox_core/releases/tag/0.14.1)
+# Usage
 
-```powershell
-python -m pip install wheel/voicevox_core-0.14.1+cuda-cp38-abi3-win_amd64.whl
-Invoke-WebRequest https://github.com/VOICEVOX/voicevox_core/releases/latest/download/download-windows-x64.exe -OutFile ./download.exe
-./download.exe
+Run OBS and VOICEVOX.
+
 ```
+python talk.py `
+    --obs_pass GKzsYMK574JexVLr `
+    --chat_video_id U5uMBS4kBuY `
+    --openai_api_key <API KEY>
+```
+
+When you write a comment in the youtube stream, zundamon will read your comment and answer.  
+The subtitile will be updated if there is a Text source named "zundamon_zimaku" in OBS.
