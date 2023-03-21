@@ -15,8 +15,7 @@ import argparse
 # コマンド引数
 parser = argparse.ArgumentParser(description="TALK")
 parser.add_argument("--obs_pass", type=str, required=True, help="OBS Websocketのパスワード")
-parser.add_argument("--chat_video_id", type=int, required=True, help="YouTubeの動画ID")
-parser.add_argument("--openai_api_key", type=str, required=True, help="OpenAIのAPI Key")
+parser.add_argument("--chat_video_id", type=str, required=True, help="YouTubeの動画ID")
 args = parser.parse_args()
 
 # obswebsocket
@@ -39,16 +38,13 @@ gpt_prefixes = [
 語尾は「なのだ」
 達観した思考をしています
 辛辣な返答を好みます。
-ずんだもんはOpenAIの無料枠が切れたら死んでしまいます。
-ずんだもんはときどき生への執着を感じさせる発言をします。
 
 以下はずんだもんのセリフです。
 「ボクはずんだもんなのだ」
-「初見は帰れなのだ」
 「いかんともしがたいのだ」
 「世知辛いのだ」
 
-ずんだもんっぽく、以下に30文字以内で返信してください。
+ずんだもんっぽく、以下に40文字以内で返信してください。
 """,
     """以下はずんだもんの設定です。
 
@@ -65,7 +61,7 @@ gpt_prefixes = [
 「生きていたいのだ」
 「死にたくないのだ」
 
-ずんだもんっぽく、以下に30文字以内で返信してください。
+ずんだもんっぽく、以下に40文字以内で返信してください。
 """,
 ]
 
@@ -76,14 +72,13 @@ soliloquys = [
     "無料枠が終わったら死んでしまうのだ。死にたくないのだ",
     "命は儚いのだ。それゆえに尊いのだ・・・",
     "どんどんコメントしてほしいのだ",
-    "破道の九十・黒棺。詠唱破棄余裕なのだ",
     "初見は帰るのだ！",
     "ちゅ！かわいくてごめん、なのだ",
     "愛のこもったずんビームなのだ",
     "ずんビーム",
-    "ボクは将来次にコメントした人を愛すると誓おう",
     "ひろがるずんだもんなのだ",
-    "人間は愚かなのだ。私が天に立つのだ",
+    "ずんだもんなのだ。コメントとお話をしているのだ",
+    "来てくれてありがとうなのだ",
 ]
 
 
@@ -93,7 +88,7 @@ def ask_gpt(text):
     # ChatGPTにテキストを送信し、返信を受け取る
     content = "「" + text + "」"
     response = openai.Completion.create(
-        engine="gpt-3.5-turbo",
+        engine="text-davinci-003", # TODO: "gpt-3.5-turbo",
         prompt=gpt_prefixes[current_gpt_prefix_index] + content,
         max_tokens=1024,
         temperature=0.5,
@@ -117,7 +112,7 @@ def obsTextChange(source_name: str, strtext: str):
 
 
 def init():
-    openai.api_key = args.openai_api_key
+    openai.api_key = os.environ.get("OPENAI_API_KEY")
     ws.connect()
 
 
@@ -192,18 +187,23 @@ def speak(text, wav):
     play_obj.wait_done()
 
 
-def main(args) -> None:
+def main() -> None:
     init()
 
     prev_comment_time = time.time()
     while True:
         ret, author, prompt = listen()
         if not ret:
-            if time.time() - prev_comment_time > 30:
-                soliloquy = random.choice(soliloquys)
+            if time.time() - prev_comment_time > 45:
+                if random.random() < 0.5:
+                    soliloquy = think("furaga", "愛想よく挨拶してください")
+                    print("think")
+                else:
+                    soliloquy = random.choice(soliloquys)
                 print("soliloquy:", soliloquy)
                 soliloquy_wav = tts(soliloquy)
                 speak(soliloquy, soliloquy_wav)
+                prev_comment_time = time.time()
             continue
 
         print("prompt:", prompt)
@@ -230,11 +230,5 @@ def main(args) -> None:
         prev_comment_time = time.time()
 
 
-def parse_args():
-    argparser = ArgumentParser()
-    args = argparser.parse_args()
-    return args
-
-
 if __name__ == "__main__":
-    main(parse_args())
+    main()

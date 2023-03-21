@@ -22,14 +22,16 @@ python -m pip install -r .\requirements.txt
 
 # Usage
 
-Run OBS and VOICEVOX.
+(OBSの画面構成については割愛)
+
+Run OBS and VOICEVOX. Then,
 
 ```
+$env:OPENAI_API_KEY = <YOUR OPENAI API KEY>
 python talk.py `
-    --obs_pass GKzsYMK574JexVLr `
-    --chat_video_id U5uMBS4kBuY `
-    --openai_api_key <API KEY>
+    --obs_pass <obsstream password>
+    --chat_video_id <YOUTUBE STREAM'S VIDEO ID> `
 ```
 
 When you write a comment in the youtube stream, zundamon will read your comment and answer.  
-The subtitile will be updated if there is a Text source named "zundamon_zimaku" in OBS.
+The subtitile in OBS, a Text source named "zundamon_zimaku", will be updated.
