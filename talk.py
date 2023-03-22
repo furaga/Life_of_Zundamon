@@ -29,19 +29,8 @@ speaker = 1  # ずんだもん
 
 current_gpt_prefix_index = 0
 
-soliloquys = [
-    "ずんだもんなのだ。噂のAIVTuberをやるのだ",
-    "無料枠が終わったら死んでしまうのだ。死にたくないのだ",
-    "命は儚いのだ。それゆえに尊いのだ・・・",
-    "どんどんコメントしてほしいのだ",
-    "初見は帰るのだ！",
-    "ちゅ！かわいくてごめん、なのだ",
-    "愛のこもったずんビームなのだ",
-    "ずんビーム",
-    "ひろがるずんだもんなのだ",
-    "ずんだもんなのだ。コメントとお話をしているのだ",
-    "来てくれてありがとうなのだ",
-]
+with open("data/soliloquys.txt", encoding="utf8") as f:
+    soliloquys = [line.strip() for line in f if len(line.strip()) > 1]
 
 
 def obsTextChange(source_name: str, strtext: str):
@@ -91,8 +80,7 @@ def think(author, prompt):
         )
 
     # OpenAI APIで回答生成
-    answer = OpenAILLM.ask_gpt(prompt)
-    ret, response = OpenAILLM.parse_answer(answer)
+    ret, response = OpenAILLM.ask_gpt(prompt)
     print(ret, response)
     if not ret:
         return ""
@@ -113,8 +101,40 @@ def tts(text):
     return res2.content
 
 
+import asyncio
+
+
+def fire_and_forget(func):
+    def wrapper(*args, **kwargs):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop.run_in_executor(None, func, *args, *kwargs)
+
+    return wrapper
+
+
+speak_queue = []
+stop_speak_thread = False
+
+
+@fire_and_forget
+def run_speak_thread():
+    while True:
+        if len(speak_queue) > 0:
+            text, wav = speak_queue.pop(0)
+            speak(text, wav)
+        else:
+            time.sleep(1)
+        if stop_speak_thread:
+            break
+
+
+def request_speak(text, wav):
+    speak_queue.append((text, wav))
+
+
 def speak(text, wav):
-    print(text)
+    print("[speak]", text)
 
     # OBSの字幕変更
     obsTextChange("zundamon_zimaku", text)
@@ -127,19 +147,17 @@ def speak(text, wav):
 def main() -> None:
     init()
 
+    run_speak_thread()
+
     prev_comment_time = time.time()
     while True:
         ret, author, prompt = listen()
         if not ret:
             if time.time() - prev_comment_time > 45:
-                if random.random() < 0.5:
-                    soliloquy = think("furaga", "愛想よく挨拶してください")
-                    print("think")
-                else:
-                    soliloquy = random.choice(soliloquys)
+                soliloquy = random.choice(soliloquys)
                 print("soliloquy:", soliloquy)
                 soliloquy_wav = tts(soliloquy)
-                speak(soliloquy, soliloquy_wav)
+                request_speak(soliloquy, soliloquy_wav)
                 prev_comment_time = time.time()
             continue
 
@@ -159,9 +177,9 @@ def main() -> None:
         answer_wav = tts(answer)
         print("tts done")
 
-        speak("「" + prompt + "」", prompt_wav)
+        request_speak("「" + prompt + "」", prompt_wav)
         time.sleep(0.5)
-        speak(answer, answer_wav)
+        request_speak(answer, answer_wav)
         print("spoken")
 
         prev_comment_time = time.time()

@@ -2,7 +2,6 @@ import time
 import openai
 import os
 import re
-import argparse
 
 # gpt
 character_setting = """〇ずんだもんのキャラ設定シート
@@ -11,7 +10,7 @@ character_setting = """〇ずんだもんのキャラ設定シート
   * Userを示す二人称は、「きみ」です。
   * Chatbotの名前は、ずんだもんです。
   * ずんだもんは中性的で少年にも見えるボーイッシュな女の子です。
-  * ずんだもんの口調は、語尾に「〜のだ」「〜なのだ」をつけます。
+  * ずんだもんの口調は、語尾に「〜のだ」「〜なのだ」「～なのだ？」をつけます。
   * ずんだもんは達観しており、辛辣な発言を好みます。しかし根は優しいです。
   * ずんだもんは視聴者が大笑いする発言を常に考えています。
   * ずんだもんは、初見の視聴者に対して厳しいです。
@@ -64,28 +63,27 @@ gpt_messages_format = [
 ]
 
 
-def parse_answer(answer):
+def parse_content(content):
+    print("/////////////")
+    print(content)
+    print("/////////////")
+
     separator1 = "【現在の感情】"
     separator2 = "【ずんだもんの発言(必ず40文字以内)】"
-    if separator1 not in answer:
+    if separator1 not in content:
         print(separator1, "does not appear in answer.")
         return False, {}
-    if separator2 not in answer:
+    if separator2 not in content:
         print(separator2, "does not appear in answer.")
         return False, {}
 
-    pos1 = answer.index(separator1)
-    pos2 = answer.index(separator2)
+    pos1 = content.index(separator1)
+    pos2 = content.index(separator2)
     if pos1 >= pos2:
         print(separator2, "appears before", separator1)
         return False, {}
-    
-    print("/////////////")
-    print(answer)
-    print("/////////////")
-
-    emotion = answer[pos1 + len(separator1) : pos2].strip()
-    dialogue = answer[pos2 + len(separator2):].strip()
+    emotion = content[pos1 + len(separator1) : pos2].strip()
+    dialogue = content[pos2 + len(separator2) :].strip()
     return True, {"emotion": emotion, "dialogue": dialogue}
 
 
@@ -106,19 +104,21 @@ def ask_gpt(text):
         try:
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
-                # model="gpt-3.5-turbo-0301",
                 messages=gpt_messages,
             )
-            break
+            content = response["choices"][0]["message"]["content"]
+            ret, answer = parse_content(content)
+            if not ret:
+                print("Failed to parse content from openai")
+            return True, answer
         except openai.error.RateLimitError:
             print("rate limit error")
-            time.sleep(5)
+            time.sleep(1)
         except openai.error.APIError:
             print("API error")
-            time.sleep(5)
+            time.sleep(1)
 
-    answer = response["choices"][0]["message"]["content"]
-    return answer
+    return False, {}
 
 
 def init_openai():
@@ -132,7 +132,7 @@ if __name__ == "__main__":
 
         while True:
             prompt = input("Input:")
-            answer = ask_gpt(prompt)
+            _, answer = ask_gpt(prompt)
             print("Answer:", answer)
 
     main()
