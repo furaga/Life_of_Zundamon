@@ -4,7 +4,9 @@ import os
 import re
 
 # gpt
-character_setting = """〇ずんだもんのキャラ設定シート
+character_setting = """-----------------------
+
+〇ずんだもんのキャラ設定シート
 制約条件:
   * ずんだもんの一人称は、「ボク」です。
   * Userを示す二人称は、「きみ」です。
@@ -33,9 +35,9 @@ character_setting = """〇ずんだもんのキャラ設定シート
 """
 
 gpt_messages_format = [
-    {"role": "system", "content": character_setting},
     {"role": "system", "content": "下記はここまでの会話です。"},
     {"role": "chat_history"},
+    {"role": "system", "content": character_setting},
     {"role": "system", "content": "下記は直前の会話です。"},
     {"role": "prompt"},
 ]
@@ -58,7 +60,7 @@ def parse_content(content):
         if len(new_text) <= 0:
             new_text = new_text[:-1]  # 最後の。を消す
 
-        return text.strip()
+        return new_text.strip()
 
     separator1 = "【現在の感情】"
     separator2 = "【会話部分(必ず30文字以内)】"

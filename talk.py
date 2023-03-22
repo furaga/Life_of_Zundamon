@@ -48,10 +48,10 @@ def init():
 
 
 def listen():
-    global stop_speak_thread
+    global is_finish
     if not chat.is_alive():
         print("[listen] ERROR: chat is dead.")
-        stop_speak_thread = True
+        is_finish = True
         time.sleep(0.1)
         exit()
     chats = [c for c in chat.get().sync_items() if len(c.message) <= 40]
@@ -116,27 +116,51 @@ def fire_and_forget(func):
     return wrapper
 
 
-speak_queue = queue.Queue()
-stop_speak_thread = False
+speak_queue = []
+tts_queue = []
+is_finish = False
 
 
 @fire_and_forget
 def run_speak_thread():
     while True:
-        text, wav = speak_queue.get()
-        print(f"[run_speak_thread] pop {text}")
-        since = time.time()
-        speak(text, wav)
-        print(
-            f"[run_speak_thread] spoken {text} | elapsed {time.time() - since:.2f} sec"
-        )
-        speak_queue.task_done()
-        if stop_speak_thread:
+        if len(speak_queue) > 0:
+            text, wav = speak_queue.pop(0)
+            print(f"[run_speak_thread] pop {text}")
+            since = time.time()
+            speak(text, wav)
+            print(
+                f"[run_speak_thread] spoken {text} | elapsed {time.time() - since:.2f} sec"
+            )
+        else:
+            time.sleep(0.5)
+        if is_finish:
             break
 
 
 def request_speak(text, wav):
-    speak_queue.put((text, wav))
+    speak_queue.append((text, wav))
+
+
+@fire_and_forget
+def run_tts_thread():
+    while True:
+        if len(tts_queue) > 0:
+            text = tts_queue.pop(0)
+            since = time.time()
+            wav = tts(text)
+            request_speak(text, wav)
+            print(
+                f"[run_tts_thread] tts {text} | elapsed {time.time() - since:.2f} sec"
+            )
+        else:
+            time.sleep(0.5)
+        if is_finish:
+            break
+
+
+def request_tts(text):
+    tts_queue.append(text)
 
 
 def speak(text, wav):
@@ -151,6 +175,7 @@ def speak(text, wav):
 async def main() -> None:
     init()
 
+    run_tts_thread()
     run_speak_thread()
 
     prev_comment_time = time.time()
@@ -168,6 +193,7 @@ async def main() -> None:
                 prev_comment_time = time.time()
             continue
 
+        request_tts("「" + prompt + "」")
         print("[main] listen:", prompt, f"| elapsed {time.time() - since:.2f} sec")
         since = time.time()
 
@@ -179,27 +205,28 @@ async def main() -> None:
                     "訳のわからないことを言うななのだ",
                 ]
             )
+        request_tts(answer)
         print("[main] think:", answer, f"| elapsed {time.time() - since:.2f} sec")
         since = time.time()
 
-        prompt_wav = tts(prompt)
-        print("[main] tts1", f"| elapsed {time.time() - since:.2f} sec")
-        since = time.time()
+        # prompt_wav = tts(prompt)
+        # print("[main] tts1", f"| elapsed {time.time() - since:.2f} sec")
+        # since = time.time()
 
-        request_speak("「" + prompt + "」", prompt_wav)
-        print(
-            "[main] request_speak1", prompt, f"| elapsed {time.time() - since:.2f} sec"
-        )
-        since = time.time()
+        # request_speak("「" + prompt + "」", prompt_wav)
+        # print(
+        #     "[main] request_speak1", prompt, f"| elapsed {time.time() - since:.2f} sec"
+        # )
+        # since = time.time()
 
-        answer_wav = tts(answer)
-        print("[main] tts2", f"| elapsed {time.time() - since:.2f} sec")
-        since = time.time()
+        # answer_wav = tts(answer)
+        # print("[main] tts2", f"| elapsed {time.time() - since:.2f} sec")
+        # since = time.time()
 
-        request_speak(answer, answer_wav)
-        print(
-            "[main] request_speak2", answer, f"| elapsed {time.time() - since:.2f} sec"
-        )
+        # request_speak(answer, answer_wav)
+        # print(
+        #     "[main] request_speak2", answer, f"| elapsed {time.time() - since:.2f} sec"
+        # )
 
         chat_history.append({"role": "system", "content": "User: " + prompt})
         chat_history.append({"role": "system", "content": "ずんだもん: " + answer})
