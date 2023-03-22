@@ -39,6 +39,8 @@ character_setting = """〇ずんだもんのキャラ設定シート
 現在の感情パラメータを反映するように、あなたの返答のトーンや発言は変化します。
 以後の会話ではまず現在の感情パラメータを出力し、その後に会話を出力してください。
 
+会話は必ず30文字以内にしてください。
+
 出力形式は以下のフォーマットとします。
 
 
@@ -50,14 +52,14 @@ character_setting = """〇ずんだもんのキャラ設定シート
 困惑: 0~5
 怒り: 0~5
 
-【ずんだもんの発言(必ず40文字以内)】
+【会話部分(必ず30文字以内)】
 了解したのだ。それでははじめるのだ。
 """
 
 gpt_messages_format = [
     {"role": "system", "content": character_setting},
-    # {"role": "system", "content": "下記はここまでの会話です。"},
-    # {"role": "chat_history"},
+    {"role": "system", "content": "下記はここまでの会話です。"},
+    {"role": "chat_history"},
     {"role": "system", "content": "下記は直前の会話です。"},
     {"role": "prompt"},
 ]
@@ -68,8 +70,18 @@ def parse_content(content):
     print(content)
     print("/////////////")
 
+    def remove_unuse_tokens(text):
+        if text.startswith("ずんだもん:"):
+            text = text[len("ずんだもん:") :]
+        return text.strip()
+
     separator1 = "【現在の感情】"
-    separator2 = "【ずんだもんの発言(必ず40文字以内)】"
+    separator2 = "【会話部分(必ず30文字以内)】"
+
+    if separator1 not in content and separator2 not in content:
+        print(separator1, "and", separator2, "does not appear in answer.")
+        return True, {"emotion": "", "dialogue": remove_unuse_tokens(content)}
+
     if separator1 not in content:
         print(separator1, "does not appear in answer.")
         return False, {}
@@ -84,38 +96,44 @@ def parse_content(content):
         return False, {}
     emotion = content[pos1 + len(separator1) : pos2].strip()
     dialogue = content[pos2 + len(separator2) :].strip()
-    return True, {"emotion": emotion, "dialogue": dialogue}
+    return True, {"emotion": emotion, "dialogue": remove_unuse_tokens(dialogue)}
 
 
-def ask_gpt(text):
+def ask_gpt(text, chat_history):
+    print("[ask_gpt]", text, flush=True)
     text = re.sub("<@.+>", "", text)
 
     # ChatGPTにテキストを送信し、返信を受け取る
     gpt_messages = []
     for msg in gpt_messages_format:
         if msg["role"] == "chat_history":
-            pass
+            gpt_messages += chat_history
         elif msg["role"] == "prompt":
             gpt_messages.append({"role": "user", "content": text})
         else:
             gpt_messages.append(msg)
 
+    print("[ask_gpt]", gpt_messages, flush=True)
     for _ in range(3):
         try:
+            since = time.time()
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=gpt_messages,
             )
             content = response["choices"][0]["message"]["content"]
+            print(f"[ask_gpt] ChatCompletion | elapsed {time.time() - since:.2f} sec")
             ret, answer = parse_content(content)
+            print(f"[ask_gpt] parse_content | elapsed {time.time() - since:.2f} sec")
             if not ret:
-                print("Failed to parse content from openai")
-            return True, answer
+                print("[ask_gpt] Failed to parse content from openai")
+                continue
+            return ret, answer
         except openai.error.RateLimitError:
-            print("rate limit error")
+            print("[ask_gpt] rate limit error")
             time.sleep(1)
         except openai.error.APIError:
-            print("API error")
+            print("[ask_gpt] API error")
             time.sleep(1)
 
     return False, {}
@@ -132,7 +150,7 @@ if __name__ == "__main__":
 
         while True:
             prompt = input("Input:")
-            _, answer = ask_gpt(prompt)
+            _, answer = ask_gpt(prompt, [])
             print("Answer:", answer)
 
     main()
