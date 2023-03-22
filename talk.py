@@ -47,8 +47,10 @@ def init():
 
 
 def listen():
+    global stop_speak_thread
     if not chat.is_alive():
-        print("ERROR: chat is dead.")
+        print("[listen] ERROR: chat is dead.")
+        stop_speak_thread = True
         time.sleep(0.1)
         exit()
     chats = [c for c in chat.get().sync_items() if len(c.message) <= 28]
@@ -81,7 +83,7 @@ def think(author, prompt):
 
     # OpenAI APIで回答生成
     ret, response = OpenAILLM.ask_gpt(prompt)
-    print(ret, response)
+    print("[think]", ret, response)
     if not ret:
         return ""
     return response["dialogue"]
@@ -122,7 +124,12 @@ def run_speak_thread():
     while True:
         if len(speak_queue) > 0:
             text, wav = speak_queue.pop(0)
+            print(f"[run_speak_thread] pop {text}")
+            since = time.time()
             speak(text, wav)
+            print(
+                f"[run_speak_thread] spoken {text} | elapsed {time.time() - since:.2f} sec"
+            )
         else:
             time.sleep(1)
         if stop_speak_thread:
@@ -134,8 +141,6 @@ def request_speak(text, wav):
 
 
 def speak(text, wav):
-    print("[speak]", text)
-
     # OBSの字幕変更
     obsTextChange("zundamon_zimaku", text)
 
@@ -151,17 +156,19 @@ def main() -> None:
 
     prev_comment_time = time.time()
     while True:
+        since = time.time()
         ret, author, prompt = listen()
         if not ret:
             if time.time() - prev_comment_time > 45:
                 soliloquy = random.choice(soliloquys)
-                print("soliloquy:", soliloquy)
+                print("[main] soliloquy:", soliloquy)
                 soliloquy_wav = tts(soliloquy)
                 request_speak(soliloquy, soliloquy_wav)
                 prev_comment_time = time.time()
             continue
 
-        print("prompt:", prompt)
+        print("[main] listen:", prompt, f"| elapsed {time.time() - since:.2f} sec")
+        since = time.time()
 
         answer = think(author, prompt)
         if len(answer) <= 0:
@@ -171,16 +178,18 @@ def main() -> None:
                     "訳のわからないことを言うななのだ",
                 ]
             )
-        print("answer:", answer)
+        print("[main] think:", answer, f"| elapsed {time.time() - since:.2f} sec")
+        since = time.time()
 
         prompt_wav = tts(prompt)
         answer_wav = tts(answer)
-        print("tts done")
+        print("[main] tts", f"| elapsed {time.time() - since:.2f} sec")
+        since = time.time()
 
         request_speak("「" + prompt + "」", prompt_wav)
         time.sleep(0.5)
         request_speak(answer, answer_wav)
-        print("spoken")
+        print("[main] spoken", prompt, f"| elapsed {time.time() - since:.2f} sec")
 
         prev_comment_time = time.time()
 
