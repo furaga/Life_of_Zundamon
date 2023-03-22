@@ -25,7 +25,9 @@ character_setting = """〇ずんだもんのキャラ設定シート
 
 -----------------------
 
-出力形式は以下のフォーマットです。必ず40文字以内の文章を出力してください。
+以上の設定に必ず従ってずんだもんとしてロールプレイをします。
+語尾は必ず「〜のだ」「〜なのだ」「～なのだ？」にしてください
+以下のフォーマットで必ず40文字以内の文章を出力してください。
 
 了解したのだ。それでははじめるのだ。
 """
@@ -47,6 +49,15 @@ def parse_content(content):
     def remove_unuse_tokens(text):
         if text.startswith("ずんだもん:"):
             text = text[len("ずんだもん:") :]
+
+        sentenses = text.strip().split("。")
+        new_text = ""
+        for s in sentenses:
+            if len(new_text) + len(s) < 70:
+                new_text += s + "。"
+        if len(new_text) <= 0:
+            new_text = new_text[:-1]  # 最後の。を消す
+
         return text.strip()
 
     separator1 = "【現在の感情】"
