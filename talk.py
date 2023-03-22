@@ -165,11 +165,11 @@ def think(author, prompt):
 def tts(text):
     # 音声合成
     res1 = requests.post(
-        "http://localhost:50021/audio_query",
+        "http://127.0.0.1:50021/audio_query",
         params={"text": text, "speaker": speaker},
     )
     res2 = requests.post(
-        "http://localhost:50021/synthesis",
+        "http://127.0.0.1:50021/synthesis",
         params={"speaker": speaker},
         data=json.dumps(res1.json()),
     )
