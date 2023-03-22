@@ -19,7 +19,7 @@ parser.add_argument("--chat_video_id", type=str, required=True, help="YouTubeの
 args = parser.parse_args()
 
 # obswebsocket
-host = "localhost"
+host = "127.0.0.1"
 port = 4444
 password = args.obs_pass
 ws = obswebsocket.obsws(host, port, password)

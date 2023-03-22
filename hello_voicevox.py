@@ -5,7 +5,7 @@ import simpleaudio
 import time
 
 # VOICEVOXをインストールしたPCのホスト名を指定してください
-HOSTNAME = "localhost"
+HOSTNAME = "127.0.0.1" # "localhost"
 
 # コマンド引数
 parser = argparse.ArgumentParser(description="VOICEVOX API")
@@ -33,7 +33,8 @@ for i, text in enumerate(texts):
     since = time.time()
     # audio_query (音声合成用のクエリを作成するAPI)
     res1 = requests.post(
-        "http://" + HOSTNAME + ":50031/audio_query",
+        "http://" + HOSTNAME + ":50021/audio_query",
+        headers = {'Content-Type': 'application/json'},
         params={"text": text, "speaker": speaker},
     )
 
@@ -42,7 +43,8 @@ for i, text in enumerate(texts):
 
     # synthesis (音声合成するAPI)
     res2 = requests.post(
-        "http://" + HOSTNAME + ":50031/synthesis",
+        "http://" + HOSTNAME + ":50021/synthesis",
+        headers = {'Content-Type': 'application/json'},
         params={"speaker": speaker},
         data=json.dumps(res1.json()),
     )
