@@ -4,10 +4,6 @@ import os
 import re
 import argparse
 
-# コマンド引数
-parser = argparse.ArgumentParser(description="HELLO OPENAI")
-args = parser.parse_args()
-
 # gpt
 character_setting = """〇ずんだもんのキャラ設定シート
 制約条件:
@@ -61,11 +57,36 @@ character_setting = """〇ずんだもんのキャラ設定シート
 
 gpt_messages_format = [
     {"role": "system", "content": character_setting},
-    #{"role": "system", "content": "下記はここまでの会話です。"},
-    #{"role": "chat_history"},
+    # {"role": "system", "content": "下記はここまでの会話です。"},
+    # {"role": "chat_history"},
     {"role": "system", "content": "下記は直前の会話です。"},
     {"role": "prompt"},
 ]
+
+
+def parse_answer(answer):
+    separator1 = "【現在の感情】"
+    separator2 = "【ずんだもんの発言(必ず40文字以内)】"
+    if separator1 not in answer:
+        print(separator1, "does not appear in answer.")
+        return False, {}
+    if separator2 not in answer:
+        print(separator2, "does not appear in answer.")
+        return False, {}
+
+    pos1 = answer.index(separator1)
+    pos2 = answer.index(separator2)
+    if pos1 >= pos2:
+        print(separator2, "appears before", separator1)
+        return False, {}
+    
+    print("/////////////")
+    print(answer)
+    print("/////////////")
+
+    emotion = answer[pos1 + len(separator1) : pos2].strip()
+    dialogue = answer[pos2 + len(separator2):].strip()
+    return True, {"emotion": emotion, "dialogue": dialogue}
 
 
 def ask_gpt(text):
@@ -96,25 +117,22 @@ def ask_gpt(text):
             print("API error")
             time.sleep(5)
 
-
-    # ChatGPTから返信を受け取ったテキストを取得する
-    print(response)
     answer = response["choices"][0]["message"]["content"]
     return answer
 
 
-def init():
+def init_openai():
     openai.api_key = os.environ.get("OPENAI_API_KEY")
 
 
-def main() -> None:
-    init()
-
-    while True:
-        prompt = input("Input:")
-        answer = ask_gpt(prompt)
-        print("Answer:", answer)
-
-
 if __name__ == "__main__":
+
+    def main() -> None:
+        init_openai()
+
+        while True:
+            prompt = input("Input:")
+            answer = ask_gpt(prompt)
+            print("Answer:", answer)
+
     main()

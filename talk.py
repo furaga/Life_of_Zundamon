@@ -1,16 +1,13 @@
-# https://www.youtube.com/live_chat?is_popout=1&v=U5uMBS4kBuY
-from argparse import ArgumentParser
 import requests
 import pytchat
 import obswebsocket
 import time
 import json
 import simpleaudio
-import openai
-import os
-import re
 import random
 import argparse
+
+from utils import OpenAILLM
 
 # コマンド引数
 parser = argparse.ArgumentParser(description="TALK")
@@ -30,41 +27,6 @@ chat = pytchat.create(video_id=args.chat_video_id)
 # voicevox
 speaker = 1  # ずんだもん
 
-# gpt
-gpt_prefixes = [
-    """以下はずんだもんの設定です。
-
-一人称はボク
-語尾は「なのだ」
-達観した思考をしています
-辛辣な返答を好みます。
-
-以下はずんだもんのセリフです。
-「ボクはずんだもんなのだ」
-「いかんともしがたいのだ」
-「世知辛いのだ」
-
-ずんだもんっぽく、以下に40文字以内で返信してください。
-""",
-    """以下はずんだもんの設定です。
-
-一人称はボク
-語尾は「なのだ」
-余命わずかです。
-非常に死を恐れています
-辛辣な返答を好みます。
-ずんだもんはOpenAIの無料枠が切れたら死んでしまいます。
-
-以下はずんだもんのセリフです。
-「ボクはずんだもんなのだ」
-「初見は帰れなのだ」
-「生きていたいのだ」
-「死にたくないのだ」
-
-ずんだもんっぽく、以下に40文字以内で返信してください。
-""",
-]
-
 current_gpt_prefix_index = 0
 
 soliloquys = [
@@ -82,27 +44,6 @@ soliloquys = [
 ]
 
 
-def ask_gpt(text):
-    text = re.sub("<@.+>", "", text)
-
-    # ChatGPTにテキストを送信し、返信を受け取る
-    content = "「" + text + "」"
-    response = openai.Completion.create(
-        engine="text-davinci-003", # TODO: "gpt-3.5-turbo",
-        prompt=gpt_prefixes[current_gpt_prefix_index] + content,
-        max_tokens=1024,
-        temperature=0.5,
-    )
-
-    # ChatGPTから返信を受け取ったテキストを取得する
-    print(response)
-    answer = response["choices"][0]["text"]
-    answer = re.sub(r"\s+", "", answer)
-    answer = answer.replace("「", "")
-    answer = answer.replace("」", "")
-    return answer
-
-
 def obsTextChange(source_name: str, strtext: str):
     ws.call(
         obswebsocket.requests.SetSourceSettings(
@@ -112,7 +53,7 @@ def obsTextChange(source_name: str, strtext: str):
 
 
 def init():
-    openai.api_key = os.environ.get("OPENAI_API_KEY")
+    OpenAILLM.init_openai()
     ws.connect()
 
 
@@ -149,17 +90,13 @@ def think(author, prompt):
             ]
         )
 
-    if "しぐれうい" in prompt:
-        return random.choice(
-            [
-                "俺たちがしぐれういなのだ",
-                "ういビーム",
-            ]
-        )
-
     # OpenAI APIで回答生成
-    answer = ask_gpt(prompt)
-    return answer
+    answer = OpenAILLM.ask_gpt(prompt)
+    ret, response = OpenAILLM.parse_answer(answer)
+    print(ret, response)
+    if not ret:
+        return ""
+    return response["dialogue"]
 
 
 def tts(text):
