@@ -54,7 +54,7 @@ def listen():
         stop_speak_thread = True
         time.sleep(0.1)
         exit()
-    chats = [c for c in chat.get().sync_items() if len(c.message) <= 28]
+    chats = [c for c in chat.get().sync_items() if len(c.message) <= 40]
     if len(chats) <= 0:
         return False, "", ""
     return True, chats[-1].author.name, chats[-1].message
@@ -62,7 +62,6 @@ def listen():
 
 def think(author, prompt, chat_history):
     global current_gpt_prefix_index
-    print("[think] BBB", flush=True)
 
     if author == "furaga" and prompt == "あと少しの命です":
         current_gpt_prefix_index = 1
@@ -84,7 +83,6 @@ def think(author, prompt, chat_history):
         )
 
     # OpenAI APIで回答生成
-    print("[think] AAA", flush=True)
     ret, response = OpenAILLM.ask_gpt(prompt, chat_history)
     print("[think]", ret, response)
     if not ret:
@@ -150,79 +148,13 @@ def speak(text, wav):
     play_obj.wait_done()
 
 
-prev_comment_time = time.time()
-chat_history = []
-
-
-@fire_and_forget
-def run_listen_think_thread(author, prompt):
-    global prev_comment_time
-    print("[run_listen_think_thread] run_listen_think_thread", flush=True)
-
-    answer = think(author, prompt, chat_history)
-    if len(answer) <= 0:
-        answer = random.choice(
-            [
-                "何を言っているかわからないのだ",
-                "訳のわからないことを言うななのだ",
-            ]
-        )
-    print(
-        "[run_listen_think_thread] think:",
-        answer,
-        f"| elapsed {time.time() - since:.2f} sec",
-        flush=True,
-    )
-    since = time.time()
-
-    prompt_wav = tts(prompt)
-    print(
-        "[run_listen_think_thread] tts1",
-        f"| elapsed {time.time() - since:.2f} sec",
-        flush=True,
-    )
-    since = time.time()
-
-    request_speak("「" + prompt + "」", prompt_wav)
-    print(
-        "[run_listen_think_thread] request_speak1",
-        prompt,
-        f"| elapsed {time.time() - since:.2f} sec",
-        flush=True,
-    )
-    since = time.time()
-
-    answer_wav = tts(answer)
-    print(
-        "[run_listen_think_thread] tts2",
-        f"| elapsed {time.time() - since:.2f} sec",
-        flush=True,
-    )
-    since = time.time()
-
-    request_speak(answer, answer_wav)
-    print(
-        "[run_listen_think_thread] request_speak2",
-        answer,
-        f"| elapsed {time.time() - since:.2f} sec",
-        flush=True,
-    )
-
-    chat_history.append({"role": "system", "content": "User: " + prompt})
-    chat_history.append({"role": "system", "content": "ずんだもん: " + answer})
-    if len(chat_history) > 5:
-        chat_history = chat_history[-5:]
-
-    prev_comment_time = time.time()
-
-
 async def main() -> None:
-    global prev_comment_time
-
     init()
 
-    run_listen_think_thread()
     run_speak_thread()
+
+    prev_comment_time = time.time()
+    chat_history = []
 
     while True:
         since = time.time()
@@ -239,69 +171,42 @@ async def main() -> None:
         print("[main] listen:", prompt, f"| elapsed {time.time() - since:.2f} sec")
         since = time.time()
 
-        run_listen_think_thread(author, prompt)
+        answer = think(author, prompt, chat_history)
+        if len(answer) <= 0:
+            answer = random.choice(
+                [
+                    "何を言っているかわからないのだ",
+                    "訳のわからないことを言うななのだ",
+                ]
+            )
+        print("[main] think:", answer, f"| elapsed {time.time() - since:.2f} sec")
+        since = time.time()
 
+        prompt_wav = tts(prompt)
+        print("[main] tts1", f"| elapsed {time.time() - since:.2f} sec")
+        since = time.time()
+
+        request_speak("「" + prompt + "」", prompt_wav)
         print(
-            "[main] run_listen_think_thread:",
-            prompt,
-            f"| elapsed {time.time() - since:.2f} sec",
+            "[main] request_speak1", prompt, f"| elapsed {time.time() - since:.2f} sec"
         )
-        await asyncio.sleep(1)
+        since = time.time()
 
-    # prev_comment_time = time.time()
-    # chat_history = []
+        answer_wav = tts(answer)
+        print("[main] tts2", f"| elapsed {time.time() - since:.2f} sec")
+        since = time.time()
 
-    # while True:
-    #     since = time.time()
-    #     ret, author, prompt = listen()
-    #     if not ret:
-    #         if time.time() - prev_comment_time > 45:
-    #             soliloquy = random.choice(soliloquys)
-    #             print("[main] soliloquy:", soliloquy)
-    #             soliloquy_wav = tts(soliloquy)
-    #             request_speak(soliloquy, soliloquy_wav)
-    #             prev_comment_time = time.time()
-    #         continue
+        request_speak(answer, answer_wav)
+        print(
+            "[main] request_speak2", answer, f"| elapsed {time.time() - since:.2f} sec"
+        )
 
-    #     print("[main] listen:", prompt, f"| elapsed {time.time() - since:.2f} sec")
-    #     since = time.time()
+        chat_history.append({"role": "system", "content": "User: " + prompt})
+        chat_history.append({"role": "system", "content": "ずんだもん: " + answer})
+        if len(chat_history) > 5:
+            chat_history = chat_history[-5:]
 
-    #     answer = think(author, prompt, chat_history)
-    #     if len(answer) <= 0:
-    #         answer = random.choice(
-    #             [
-    #                 "何を言っているかわからないのだ",
-    #                 "訳のわからないことを言うななのだ",
-    #             ]
-    #         )
-    #     print("[main] think:", answer, f"| elapsed {time.time() - since:.2f} sec")
-    #     since = time.time()
-
-    #     prompt_wav = tts(prompt)
-    #     print("[main] tts1", f"| elapsed {time.time() - since:.2f} sec")
-    #     since = time.time()
-
-    #     request_speak("「" + prompt + "」", prompt_wav)
-    #     print(
-    #         "[main] request_speak1", prompt, f"| elapsed {time.time() - since:.2f} sec"
-    #     )
-    #     since = time.time()
-
-    #     answer_wav = tts(answer)
-    #     print("[main] tts2", f"| elapsed {time.time() - since:.2f} sec")
-    #     since = time.time()
-
-    #     request_speak(answer, answer_wav)
-    #     print(
-    #         "[main] request_speak2", answer, f"| elapsed {time.time() - since:.2f} sec"
-    #     )
-
-    #     chat_history.append({"role": "system", "content": "User: " + prompt})
-    #     chat_history.append({"role": "system", "content": "ずんだもん: " + answer})
-    #     if len(chat_history) > 5:
-    #         chat_history = chat_history[-5:]
-
-    #     prev_comment_time = time.time()
+        prev_comment_time = time.time()
 
 
 if __name__ == "__main__":
