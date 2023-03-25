@@ -67,6 +67,13 @@ def listen():
 def think(author, prompt, chat_history):
     global current_gpt_prefix_index
 
+    if args.mk8dx:
+        if author == "furaga" and prompt == "nf":
+            # ゴールの感想を述べさせる
+            place = mk8dx_history[-1][-1]
+            answer = MK8DX.ask_gpt_mk8dx(0, 0, None, None, place, nf=True)
+            return answer
+
     if author == "furaga" and prompt == "あと少しの命です":
         current_gpt_prefix_index = 1
         print("Change current_gpt_prefix_index to", current_gpt_prefix_index)
@@ -336,8 +343,13 @@ async def main() -> None:
                     prev_comment_time = time.time()
             continue
 
-        request_tts("「" + prompt + "」")
-        print("[main] listen:", prompt, f"| elapsed {time.time() - since:.2f} sec")
+        if args.mk8dx and author == "furaga" and prompt == "nf":
+            # 特殊コマンドなので喋らせない
+            pass
+        else:
+            request_tts("「" + prompt + "」")
+            print("[main] listen:", prompt, f"| elapsed {time.time() - since:.2f} sec")
+
         since = time.time()
 
         answer = think(author, prompt, chat_history)

@@ -127,8 +127,13 @@ def ask_gpt(text, chat_history):
     return False, {}
 
 
-def ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place):
-    prompt_template = """〇ずんだもんのキャラ設定シート
+prev_status_ = ""
+
+
+def ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place, nf=False):
+    global prev_status_
+
+    system_prompt = """〇ずんだもんのキャラ設定シート
 制約条件:
   * ずんだもんの一人称は、「ボク」です。
   * ずんだもんは中性的で少年にも見えるボーイッシュな女の子です。
@@ -144,18 +149,32 @@ def ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place):
 ＊上記の条件は必ず守ること！
 
 あなたは上記の設定にしたがって、マリオカート8DXの実況プレイをしています。
-現在のレース状況は以下の通りです。
+"""
 
-・あなたの順位は{0}位です
+    if not nf:
+        status = """・あなたの順位は{0}位です
 ・あなたが所持している表アイテムは {1}です
 ・あなたが所持している裏アイテムは {2}です
 ・あなたが所持しているコイン枚数は {3}枚です
 ・あなたは{4}周目を走っています
-
-この状況を踏まえて、的確な実況コメントを30文字以内で出力してください。
-"""
-    prompt = prompt_template.format(place, omote, ura, n_coin, n_lap)
-    gpt_messages = [{"role": "user", "content": prompt}]
+""".format(
+            place, omote, ura, n_coin, n_lap
+        )
+        gpt_messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": "直前ののレース状況は以下の通りです"},
+            {"role": "user", "content": prev_status_},
+            {"role": "user", "content": "現在のレース状況は以下の通りです"},
+            {"role": "user", "content": status},
+            {"role": "user", "content": "この状況を踏まえて、的確な実況コメントを30文字以内で出力してください。"},
+        ]
+        prev_status_ = status
+    else:
+        gpt_messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"あなたはたった今、{place}位でゴールしました"},
+            {"role": "user", "content": "この状況を踏まえて、的確な実況コメントを30文字以内で出力してください。"},
+        ]
 
     for _ in range(3):
         try:
