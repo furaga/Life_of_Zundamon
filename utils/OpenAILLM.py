@@ -97,13 +97,17 @@ def ask_gpt(text, chat_history):
     for _ in range(3):
         try:
             since = time.time()
+            print(f"[ask_gpt] openai.ChatCompletion.create", flush=True)
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=gpt_messages,
                 timeout=10,
             )
             content = response["choices"][0]["message"]["content"]
-            print(f"[ask_gpt] ChatCompletion | elapsed {time.time() - since:.2f} sec")
+            print(
+                f"[ask_gpt] ChatCompletion | elapsed {time.time() - since:.2f} sec",
+                flush=True,
+            )
             ret, answer = parse_content(content)
             print(f"[ask_gpt] parse_content | elapsed {time.time() - since:.2f} sec")
             if not ret:
@@ -135,20 +139,20 @@ def ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place):
   * 落ち着くのだ。丁寧に走るのだ
 
 ずんだもんの行動指針:
-  * マリオカートのプレイ実況をしてください
+  * マリオカート8DXのプレイ実況をしてください
 
 ＊上記の条件は必ず守ること！
 
-あなたは上記の設定にしたがって、マリオカートの実況プレイをしています。
+あなたは上記の設定にしたがって、マリオカート8DXの実況プレイをしています。
 現在のレース状況は以下の通りです。
 
-順位：{0}位
-表アイテム： {1}
-裏アイテム： {2}
-所持コイン： {3}枚
-ラップ： {4}周目
+・あなたの順位は{0}位です
+・あなたが所持している表アイテムは {1}です
+・あなたが所持している裏アイテムは {2}です
+・あなたが所持しているコイン枚数は {3}枚です
+・あなたは{4}周目を走っています
 
-この状況を踏まえて、面白い実況コメントを30文字以内で出力してください。
+この状況を踏まえて、的確な実況コメントを30文字以内で出力してください。
 """
     prompt = prompt_template.format(place, omote, ura, n_coin, n_lap)
     gpt_messages = [{"role": "user", "content": prompt}]
@@ -156,6 +160,7 @@ def ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place):
     for _ in range(3):
         try:
             since = time.time()
+            print(f"[ask_gpt_mk8dx] openai.ChatCompletion.create", flush=True)
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=gpt_messages,
@@ -163,7 +168,8 @@ def ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place):
             )
             content = response["choices"][0]["message"]["content"]
             print(
-                f"[ask_gpt_mk8dx] ChatCompletion | elapsed {time.time() - since:.2f} sec"
+                f"[ask_gpt_mk8dx] ChatCompletion | elapsed {time.time() - since:.2f} sec",
+                flush=True,
             )
             return True, content
         except openai.error.RateLimitError:

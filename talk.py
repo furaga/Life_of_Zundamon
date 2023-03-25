@@ -21,7 +21,7 @@ parser.add_argument("--mk8dx", action="store_true")
 args = parser.parse_args()
 
 # obswebsocket
-host = "127.0.0.1"
+host = "localhost"
 port = 4444
 password = args.obs_pass
 ws = obswebsocket.obsws(host, port, password)
@@ -143,19 +143,23 @@ def run_speak_thread():
 
 
 def game_capture():
-    out_path = Path(os.getcwd()) / "/__tmp__.jpg"
+    out_path = Path(os.getcwd()) / "__tmp__.jpg"
     ws.call(
-        requests.TakeSourceScreenshot(
+        obswebsocket.requests.TakeSourceScreenshot(
             sourceName="映像キャプチャデバイス",
             embedPictureFormat="jpg",
-            saveToFilePath=str(out_path),
+            saveToFilePath=str(out_path).replace("\\", "/"),
         )
     )
     img = cv2.imread(str(out_path))
     return img
 
 
+mk8dx_history = []
+
+
 def parse_mk8dx_screen(img):
+    global mk8dx_history
     ret_coin, n_coin = MK8DX.detect_coin(img)
     ret_lap, n_lap = MK8DX.detect_lap(img)
     omote, ura = MK8DX.detect_items(img)
@@ -168,7 +172,7 @@ def parse_mk8dx_screen(img):
     if place[0] < 0.7:
         place = [0, "-1"]
 
-    history.append([n_coin, n_lap, omote, ura, place])
+    mk8dx_history.append([n_coin, n_lap, omote, ura, place])
 
     if not ret_coin or not (0 <= n_coin <= 10):
         return False, None
@@ -180,10 +184,10 @@ def parse_mk8dx_screen(img):
     # print(f"[C] Elapsed {time.time() - since:.2f} sec")
     # since = time.time()
 
-    if len(history) >= 3:
-        history = history[-3:]
+    if len(mk8dx_history) >= 3:
+        mk8dx_history = mk8dx_history[-3:]
 
-    if len(history) < 3:
+    if len(mk8dx_history) < 3:
         return False, None
 
     def is_same_history_item(a, b):
@@ -198,52 +202,77 @@ def parse_mk8dx_screen(img):
         return True
 
     # 3フレーム同じ結果だったら採用してOBS側を更新
-    if not is_same_history_item(history[-1], history[-2]):
+    if not is_same_history_item(mk8dx_history[-1], mk8dx_history[-2]):
         return False, None
-    if not is_same_history_item(history[-2], history[-3]):
+    if not is_same_history_item(mk8dx_history[-2], mk8dx_history[-3]):
         return False, None
 
-    return True, n_coin, n_lap, omote, ura, place
+    return True, (n_coin, n_lap, omote, ura, place)
 
 
 def think_mk8dx(n_coin, n_lap, omote, ura, place):
     # OpenAI APIで回答生成
-    ret, response = OpenAILLM.ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place)
-    print("[think_mk8dx]", ret, response)
+    ret, answer = OpenAILLM.ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place)
+    answer = answer.replace("「", "").replace("」", "")
     if not ret:
         return ""
-    return response["dialogue"]
+    return answer
 
 
 def set_obs_current_mk8dx_info(n_coin, n_lap, omote, ura, place):
-    text += f"順位: {place[1]}\n"
+    text = f"順位: {place[1]}\n"
     text += f"アイテム: {omote[1]}, {ura[1]}\n"
-    text = f"コイン: {n_coin}枚\n"
+    text += f"コイン: {n_coin}枚\n"
     text += f"ラップ: {n_lap}週目\n"
     obsTextChange("current_mk8dx_info", text)
 
 
 @fire_and_forget
 def run_mk8dx():
+    global is_finish
     MK8DX.init(Path("data/mk8dx_images"))
+    set_obs_current_mk8dx_info(0, 0, [1, "--"], [1, "--"], [1, "--"])
     with open("mk8dx_chat_history.txt", "a", encoding="utf8") as f:
         while True:
-            img = game_capture()
-            ret, result = parse_mk8dx_screen(img)
-            if not ret:
-                continue
+            try:
+                if is_finish:
+                    break
 
-            n_coin, n_lap, omote, ura, place = result
-            set_obs_current_mk8dx_info(n_coin, n_lap, omote, ura, place)
+                since = time.time()
+                # print("[run_mk8dx] start game capture", flush=True)
+                img = game_capture()
+                # print("[run_mk8dx] game capture", flush=True)
+                ret, result = parse_mk8dx_screen(img)
+                # print("[run_mk8dx] parse_mk8dx_screen", flush=True)
+                if not ret:
+                    continue
 
-            answer = think_mk8dx(n_coin, n_lap, omote, ura, place)
-            if len(answer) >= 1:
-                f.write(f"{place},{omote},{ura},{n_lap},{n_coin},{answer}\n")
-                f.flush()
-                request_tts(answer)
-            print("[main] think:", answer, f"| elapsed {time.time() - since:.2f} sec")
+                n_coin, n_lap, omote, ura, place = result
+                set_obs_current_mk8dx_info(n_coin, n_lap, omote, ura, place)
+                # print("[run_mk8dx] set_obs_current_mk8dx_info", flush=True)
 
-            if is_finish:
+                # 喋ることがないときにマリカの話をさせる
+                if len(tts_queue) >= 1 or len(speak_queue) >= 1:
+                    continue
+
+                answer = think_mk8dx(n_coin, n_lap, omote, ura, place)
+                # print("[run_mk8dx] think_mk8dx")
+                if len(answer) >= 1:
+                    f.write(f"{place},{omote},{ura},{n_lap},{n_coin},{answer}\n")
+                    f.flush()
+                    request_tts(answer)
+                print(
+                    "[run_mk8dx] think:",
+                    answer,
+                    f"| elapsed {time.time() - since:.2f} sec",
+                    flush=True,
+                )
+            except Exception as e:
+                import traceback
+
+                print("error in run_mk8dx:", e)
+                print(traceback.format_exc())
+                is_finish = True
                 break
 
 
@@ -283,6 +312,7 @@ def speak(text, wav):
 
 async def main() -> None:
     init()
+    obsTextChange("zundamon_zimaku", "")
 
     run_tts_thread()
     run_speak_thread()
@@ -297,12 +327,13 @@ async def main() -> None:
         since = time.time()
         ret, author, prompt = listen()
         if not ret:
-            if time.time() - prev_comment_time > 45:
-                soliloquy = random.choice(soliloquys)
-                print("[main] soliloquy:", soliloquy)
-                soliloquy_wav = tts(soliloquy)
-                request_speak(soliloquy, soliloquy_wav)
-                prev_comment_time = time.time()
+            if not args.mk8dx:
+                if time.time() - prev_comment_time > 45:
+                    soliloquy = random.choice(soliloquys)
+                    print("[main] soliloquy:", soliloquy)
+                    soliloquy_wav = tts(soliloquy)
+                    request_speak(soliloquy, soliloquy_wav)
+                    prev_comment_time = time.time()
             continue
 
         request_tts("「" + prompt + "」")
