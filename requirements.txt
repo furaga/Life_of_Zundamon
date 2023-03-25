@@ -4,3 +4,4 @@ black
 requests
 pytchat
 openai
+opencv-python
