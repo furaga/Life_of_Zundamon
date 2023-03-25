@@ -112,11 +112,23 @@ def detect_items(img):
     ura_feat = get_clip_features(ura)
     ura_feat /= np.linalg.norm(ura_feat)
 
+    def adhoc_correction(score, item_name):
+        if item_name in ["キノコ", "バナナ", "緑甲羅", "赤甲羅"]:
+            # XXXよりトリプルXXXのスコアがなぜか大きく出がちなので、シングルアイテム系にバフを掛ける
+            return score + 0.02
+        return score
+
     omote_ls = []
     ura_ls = []
     for item_name, (ref_mask, ref_feat) in item_dict_.items():
-        omote_ls.append([match(omote_feat, ref_feat), item_name])
-        ura_ls.append([match(ura_feat, ref_feat), item_name])
+        item_name = item_name.split("_")[0]
+        omote_score = match(omote_feat, ref_feat)
+        omote_score = adhoc_correction(omote_score, item_name)
+        omote_ls.append([omote_score, item_name])
+
+        ura_score = match(ura_feat, ref_feat)
+        ura_score = adhoc_correction(ura_score, item_name)
+        ura_ls.append([ura_score, item_name])
 
     omote_ls = sorted(omote_ls)
     ura_ls = sorted(ura_ls)
