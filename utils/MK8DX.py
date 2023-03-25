@@ -9,7 +9,7 @@ import numpy as np
 import clip
 import torch
 
-import digit_ocr
+from . import digit_ocr
 
 
 item_dict_ = {}
@@ -42,9 +42,6 @@ def imread_safe(filename, flags=cv2.IMREAD_COLOR, dtype=np.uint8):
 
 
 ITEM_IMAGE_SIZE = 153
-
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model, clip_preprocess = clip.load("ViT-B/32", device)
 
 
 def get_clip_features(img):
@@ -81,21 +78,19 @@ def load_place_images(place_dir: Path):
     print("Loaded", len(place_dict_), "place images.")
 
 
+device, model, clip_preprocess = None, None, None
+
+
 def init(root_dir: Path):
+    global device, model, clip_preprocess
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model, clip_preprocess = clip.load("ViT-B/32", device)
     load_item_images(root_dir / "items")
     load_place_images(root_dir / "place")
 
 
-def match(img, ref_mask, ref_feat, debug=False):
-    # img = cv2.bitwise_and(img, img, mask=ref_mask)
-    feat = get_clip_features(img)
-    feat /= np.linalg.norm(feat)
-    similarity = feat @ ref_feat.T
-    if debug:
-        cv2.imshow("img", img)
-    #        cv2.imshow("ref", ref[:, :, :3])
-    #      cv2.imshow("mask", mask)
-    #       cv2.imshow("diff", diff)
+def match(img_feat, ref_feat):
+    similarity = img_feat @ ref_feat.T
     return similarity[0][0]
 
 
@@ -106,23 +101,27 @@ def detect_items(img):
     y1 = int(65 / 720 * h)
     y2 = int(167 / 720 * h)
     omote = img[y1:y2, x1:x2]
+    omote_feat = get_clip_features(omote)
+    omote_feat /= np.linalg.norm(omote_feat)
 
     x1 = int(48 / 1280 * w)
     x2 = int(112 / 1280 * w)
     y1 = int(38 / 720 * h)
     y2 = int(102 / 720 * h)
     ura = img[y1:y2, x1:x2]
+    ura_feat = get_clip_features(ura)
+    ura_feat /= np.linalg.norm(ura_feat)
 
     omote_ls = []
     ura_ls = []
     for item_name, (ref_mask, ref_feat) in item_dict_.items():
-        omote_ls.append([match(omote, ref_mask, ref_feat, debug=False), item_name])
-        ura_ls.append([match(ura, ref_mask, ref_feat, debug=False), item_name])
+        omote_ls.append([match(omote_feat, ref_feat), item_name])
+        ura_ls.append([match(ura_feat, ref_feat), item_name])
 
     omote_ls = sorted(omote_ls)
     ura_ls = sorted(ura_ls)
-    print(omote_ls[-2:])
-    print(ura_ls[-2:])
+    # print(omote_ls[-2:])
+    # print(ura_ls[-2:])
 
     return omote_ls[-1], ura_ls[-1]
 
@@ -135,13 +134,15 @@ def detect_place(img):
     y1 = int(840 / 1080 * h)
     y2 = int(1030 / 1080 * h)
     place_img = img[y1:y2, x1:x2]
+    place_img_feat = get_clip_features(place_img)
+    place_img_feat /= np.linalg.norm(place_img_feat)
 
     ls = []
     for item_name, (ref_mask, ref_feat) in place_dict_.items():
-        ls.append([match(place_img, ref_mask, ref_feat, debug=False), item_name])
+        ls.append([match(place_img_feat, ref_feat), item_name])
 
     ls = sorted(ls)
-    print(ls[-2:])
+    # print(ls[-2:])
 
     return ls[-1]
 
@@ -149,7 +150,7 @@ def detect_place(img):
 def detect_number(img, verbose):
     coin_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     ret, value = digit_ocr.detect_digit(coin_img, verbose)
-    print(ret, value)
+    # print(ret, value)
     return ret, value
 
 
