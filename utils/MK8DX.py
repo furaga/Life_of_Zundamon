@@ -120,8 +120,8 @@ def detect_items(img):
 
     omote_ls = sorted(omote_ls)
     ura_ls = sorted(ura_ls)
-    # print(omote_ls[-2:])
-    # print(ura_ls[-2:])
+    # print("[omote]", omote_ls[-2:])
+    # print("[ura  ]",ura_ls[-2:])
 
     return omote_ls[-1], ura_ls[-1]
 
