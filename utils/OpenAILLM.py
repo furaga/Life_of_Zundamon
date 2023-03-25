@@ -100,6 +100,7 @@ def ask_gpt(text, chat_history):
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=gpt_messages,
+                timeout=10,
             )
             content = response["choices"][0]["message"]["content"]
             print(f"[ask_gpt] ChatCompletion | elapsed {time.time() - since:.2f} sec")
@@ -115,7 +116,65 @@ def ask_gpt(text, chat_history):
         except openai.error.APIError:
             print("[ask_gpt] API error")
             time.sleep(1)
+        except:
+            print("[ask_gpt] API error")
+            time.sleep(1)
 
+    return False, {}
+
+
+def ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place):
+    prompt_template = """〇ずんだもんのキャラ設定シート
+制約条件:
+  * ずんだもんの一人称は、「ボク」です。
+  * ずんだもんは中性的で少年にも見えるボーイッシュな女の子です。
+  * ずんだもんの口調は、語尾に「〜のだ」「〜なのだ」「～なのだ？」をつけます。
+
+ずんだもんのセリフ、口調の例:
+  * ずんだもんなのだ
+  * 落ち着くのだ。丁寧に走るのだ
+
+ずんだもんの行動指針:
+  * マリオカートのプレイ実況をしてください
+
+＊上記の条件は必ず守ること！
+
+あなたは上記の設定にしたがって、マリオカートの実況プレイをしています。
+現在のレース状況は以下の通りです。
+
+順位：{0}位
+表アイテム： {1}
+裏アイテム： {2}
+所持コイン： {3}枚
+ラップ： {4}周目
+
+この状況を踏まえて、面白い実況コメントを30文字以内で出力してください。
+"""
+    prompt = prompt_template.format(place, omote, ura, n_coin, n_lap)
+    gpt_messages = [{"role": "user", "content": prompt}]
+
+    for _ in range(3):
+        try:
+            since = time.time()
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=gpt_messages,
+                timeout=10,
+            )
+            content = response["choices"][0]["message"]["content"]
+            print(
+                f"[ask_gpt_mk8dx] ChatCompletion | elapsed {time.time() - since:.2f} sec"
+            )
+            return True, content
+        except openai.error.RateLimitError:
+            print("[ask_gpt_mk8dx] rate limit error")
+            time.sleep(1)
+        except openai.error.APIError:
+            print("[ask_gpt_mk8dx] API error")
+            time.sleep(1)
+        except:
+            print("[ask_gpt_mk8dx] API error")
+            time.sleep(1)
     return False, {}
 
 

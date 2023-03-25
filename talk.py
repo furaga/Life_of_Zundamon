@@ -6,14 +6,18 @@ import json
 import simpleaudio
 import random
 import argparse
-import queue
+import os
+from pathlib import Path
+import cv2
 
+from utils import MK8DX
 from utils import OpenAILLM
 
 # コマンド引数
 parser = argparse.ArgumentParser(description="TALK")
 parser.add_argument("--obs_pass", type=str, required=True, help="OBS Websocketのパスワード")
 parser.add_argument("--chat_video_id", type=str, required=True, help="YouTubeの動画ID")
+parser.add_argument("--mk8dx", action="store_true")
 args = parser.parse_args()
 
 # obswebsocket
@@ -138,6 +142,111 @@ def run_speak_thread():
             break
 
 
+def game_capture():
+    out_path = Path(os.getcwd()) / "/__tmp__.jpg"
+    ws.call(
+        requests.TakeSourceScreenshot(
+            sourceName="映像キャプチャデバイス",
+            embedPictureFormat="jpg",
+            saveToFilePath=str(out_path),
+        )
+    )
+    img = cv2.imread(str(out_path))
+    return img
+
+
+def parse_mk8dx_screen(img):
+    ret_coin, n_coin = MK8DX.detect_coin(img)
+    ret_lap, n_lap = MK8DX.detect_lap(img)
+    omote, ura = MK8DX.detect_items(img)
+    if omote[0] < 0.81:
+        omote = [0, "none"]
+    if omote[1] == "none" or ura[0] < 0.7:
+        ura = [0, "none"]
+
+    place = MK8DX.detect_place(img)
+    if place[0] < 0.7:
+        place = [0, "-1"]
+
+    history.append([n_coin, n_lap, omote, ura, place])
+
+    if not ret_coin or not (0 <= n_coin <= 10):
+        return False, None
+    if not ret_lap or not (0 <= n_lap <= 3):
+        return False, None
+    if place[1] == "-1":
+        return False, None
+
+    # print(f"[C] Elapsed {time.time() - since:.2f} sec")
+    # since = time.time()
+
+    if len(history) >= 3:
+        history = history[-3:]
+
+    if len(history) < 3:
+        return False, None
+
+    def is_same_history_item(a, b):
+        for i in range(2):
+            if a[i] != b[i]:
+                return False
+
+        for i in range(2, 5):
+            if a[i][1] != b[i][1]:
+                return False
+
+        return True
+
+    # 3フレーム同じ結果だったら採用してOBS側を更新
+    if not is_same_history_item(history[-1], history[-2]):
+        return False, None
+    if not is_same_history_item(history[-2], history[-3]):
+        return False, None
+
+    return True, n_coin, n_lap, omote, ura, place
+
+
+def think_mk8dx(n_coin, n_lap, omote, ura, place):
+    # OpenAI APIで回答生成
+    ret, response = OpenAILLM.ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place)
+    print("[think_mk8dx]", ret, response)
+    if not ret:
+        return ""
+    return response["dialogue"]
+
+
+def set_obs_current_mk8dx_info(n_coin, n_lap, omote, ura, place):
+    text += f"順位: {place[1]}\n"
+    text += f"アイテム: {omote[1]}, {ura[1]}\n"
+    text = f"コイン: {n_coin}枚\n"
+    text += f"ラップ: {n_lap}週目\n"
+    obsTextChange("current_mk8dx_info", text)
+
+
+@fire_and_forget
+def run_mk8dx():
+    MK8DX.init(Path("data/mk8dx_images"))
+    with open("mk8dx_chat_history.txt", "a", encoding="utf8") as f:
+        while True:
+            img = game_capture()
+            ret, result = parse_mk8dx_screen(img)
+            if not ret:
+                continue
+
+            n_coin, n_lap, omote, ura, place = result
+            set_obs_current_mk8dx_info(n_coin, n_lap, omote, ura, place)
+
+            answer = think_mk8dx(n_coin, n_lap, omote, ura, place)
+            if len(answer) >= 1:
+                f.write(f"{place},{omote},{ura},{n_lap},{n_coin},{answer}\n")
+                f.flush()
+                request_tts(answer)
+            print("[main] think:", answer, f"| elapsed {time.time() - since:.2f} sec")
+
+            if is_finish:
+                break
+
+
 def request_speak(text, wav):
     speak_queue.append((text, wav))
 
@@ -178,6 +287,9 @@ async def main() -> None:
     run_tts_thread()
     run_speak_thread()
 
+    if args.mk8dx:
+        run_mk8dx()
+
     prev_comment_time = time.time()
     chat_history = []
 
@@ -208,25 +320,6 @@ async def main() -> None:
         request_tts(answer)
         print("[main] think:", answer, f"| elapsed {time.time() - since:.2f} sec")
         since = time.time()
-
-        # prompt_wav = tts(prompt)
-        # print("[main] tts1", f"| elapsed {time.time() - since:.2f} sec")
-        # since = time.time()
-
-        # request_speak("「" + prompt + "」", prompt_wav)
-        # print(
-        #     "[main] request_speak1", prompt, f"| elapsed {time.time() - since:.2f} sec"
-        # )
-        # since = time.time()
-
-        # answer_wav = tts(answer)
-        # print("[main] tts2", f"| elapsed {time.time() - since:.2f} sec")
-        # since = time.time()
-
-        # request_speak(answer, answer_wav)
-        # print(
-        #     "[main] request_speak2", answer, f"| elapsed {time.time() - since:.2f} sec"
-        # )
 
         chat_history.append({"role": "system", "content": "User: " + prompt})
         chat_history.append({"role": "system", "content": "ずんだもん: " + answer})
