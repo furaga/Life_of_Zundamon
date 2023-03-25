@@ -93,9 +93,9 @@ def main() -> None:
                     answer = ask_gpt(prompt)
                  #   answer = "XXX"
                     answer = answer.replace("\n", "").strip()
-                    f.write(f"{place},{omote},{ura},{lap},{answer}\n")
+                    f.write(f"{place},{omote},{ura},{lap},{coin},{answer}\n")
                     f.flush()
-                    print(f"{place},{omote},{ura},{lap},{answer}")
+                    print(f"{place},{omote},{ura},{lap},{coin},{answer}")
 
 
 if __name__ == "__main__":
