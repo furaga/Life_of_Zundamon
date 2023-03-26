@@ -173,7 +173,13 @@ def ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place, nf=False):
         gpt_messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"あなたはたった今、{place}位でゴールしました"},
-            {"role": "user", "content": "この状況を踏まえて、的確な実況コメントを30文字以内で出力してください。"},
+            {
+                "role": "user",
+                "content": f"""以下のフォーマットで感想をを30文字以内で出力してください。
+
+{place}位でゴールなのだ。[感想]
+""",
+            },
         ]
 
     for _ in range(3):
@@ -200,7 +206,7 @@ def ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place, nf=False):
         except:
             print("[ask_gpt_mk8dx] API error")
             time.sleep(1)
-    return False, {}
+    return False, ""
 
 
 def init_openai():

@@ -70,8 +70,7 @@ def think(author, prompt, chat_history):
     if args.mk8dx:
         if author == "furaga" and prompt == "nf":
             # ゴールの感想を述べさせる
-            place = mk8dx_history[-1][-1]
-            answer = MK8DX.ask_gpt_mk8dx(0, 0, None, None, place, nf=True)
+            _, answer = OpenAILLM.ask_gpt_mk8dx(0, 0, None, None, latest_place[1], nf=True)
             return answer
 
     if author == "furaga" and prompt == "あと少しの命です":
@@ -219,7 +218,7 @@ def parse_mk8dx_screen(img):
 
 def think_mk8dx(n_coin, n_lap, omote, ura, place):
     # OpenAI APIで回答生成
-    ret, answer = OpenAILLM.ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place)
+    ret, answer = OpenAILLM.ask_gpt_mk8dx(n_coin, n_lap, omote[1], ura[1], place[1])
     answer = answer.replace("「", "").replace("」", "")
     if not ret:
         return ""
@@ -234,9 +233,11 @@ def set_obs_current_mk8dx_info(n_coin, n_lap, omote, ura, place):
     obsTextChange("current_mk8dx_info", text)
 
 
+latest_place = [0, "1"]
+
 @fire_and_forget
 def run_mk8dx():
-    global is_finish
+    global is_finish, latest_place
     MK8DX.init(Path("data/mk8dx_images"))
     set_obs_current_mk8dx_info(0, 0, [1, "--"], [1, "--"], [1, "--"])
     with open("mk8dx_chat_history.txt", "a", encoding="utf8") as f:
@@ -246,24 +247,25 @@ def run_mk8dx():
                     break
 
                 since = time.time()
-                # print("[run_mk8dx] start game capture", flush=True)
+                print("[run_mk8dx] start game capture", flush=True)
                 img = game_capture()
-                # print("[run_mk8dx] game capture", flush=True)
+                print("[run_mk8dx] game capture", flush=True)
                 ret, result = parse_mk8dx_screen(img)
-                # print("[run_mk8dx] parse_mk8dx_screen", flush=True)
+                print("[run_mk8dx] parse_mk8dx_screen", flush=True)
                 if not ret:
                     continue
 
                 n_coin, n_lap, omote, ura, place = result
                 set_obs_current_mk8dx_info(n_coin, n_lap, omote, ura, place)
-                # print("[run_mk8dx] set_obs_current_mk8dx_info", flush=True)
+                print("[run_mk8dx] set_obs_current_mk8dx_info", flush=True)
 
                 # 喋ることがないときにマリカの話をさせる
                 if len(tts_queue) >= 1 or len(speak_queue) >= 1:
                     continue
-
+                
+                latest_place = place
                 answer = think_mk8dx(n_coin, n_lap, omote, ura, place)
-                # print("[run_mk8dx] think_mk8dx")
+                print("[run_mk8dx] think_mk8dx")
                 if len(answer) >= 1:
                     f.write(f"{place},{omote},{ura},{n_lap},{n_coin},{answer}\n")
                     f.flush()
