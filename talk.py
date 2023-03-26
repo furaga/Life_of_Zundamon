@@ -86,7 +86,12 @@ def think(author, prompt, chat_history):
     return response["dialogue"]
 
 
+during_tts_ = False
+
+
 def tts(text):
+    global during_tts_
+    during_tts_ = True
     # 音声合成
     res1 = requests.post(
         "http://127.0.0.1:50021/audio_query",
@@ -97,6 +102,7 @@ def tts(text):
         params={"speaker": speaker},
         data=json.dumps(res1.json()),
     )
+    during_tts_ = False
     return res2.content
 
 
@@ -259,6 +265,10 @@ def run_mk8dx():
                 if len(tts_queue) >= 1 or len(speak_queue) >= 1:
                     continue
 
+                # あまり昔すぎる情報を喋らせないように、ttsが終わってから返答を作り始める
+                if during_tts_:
+                    continue
+
                 latest_place = place
                 answer = think_mk8dx(n_coin, n_lap, omote, ura, place)
                 # print("[run_mk8dx] think_mk8dx")
@@ -324,6 +334,13 @@ def speak(text, wav):
     play_obj.wait_done()
 
 
+def reset_mk8dx():
+    global mk8dx_history
+    mk8dx_history = []
+    obsTextChange("zundamon_zimaku", "")
+    set_obs_current_mk8dx_info(0, 0, [1, "--"], [1, "--"], [1, "--"])
+
+
 async def main() -> None:
     global is_finish
 
@@ -362,6 +379,7 @@ async def main() -> None:
                 print(
                     "[main] think:", answer, f"| elapsed {time.time() - since:.2f} sec"
                 )
+                reset_mk8dx()
                 prev_comment_time = time.time()
             elif args.mk8dx and author == "furaga" and prompt == "こんばんは":
                 # 開始の挨拶
