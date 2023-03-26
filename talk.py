@@ -67,20 +67,6 @@ def listen():
 def think(author, prompt, chat_history):
     global current_gpt_prefix_index
 
-    if args.mk8dx:
-        if author == "furaga" and prompt == "nf":
-            # ゴールの感想を述べさせる
-            _, answer = OpenAILLM.ask_gpt_mk8dx(0, 0, None, None, latest_place[1], nf=True)
-            return answer
-
-    if author == "furaga" and prompt == "あと少しの命です":
-        current_gpt_prefix_index = 1
-        print("Change current_gpt_prefix_index to", current_gpt_prefix_index)
-
-    if author == "furaga" and prompt == "まだ大丈夫です":
-        current_gpt_prefix_index = 0
-        print("Change current_gpt_prefix_index to", current_gpt_prefix_index)
-
     # ハードコード
     if "初見" in prompt:
         return random.choice(
@@ -133,18 +119,27 @@ is_finish = False
 
 @fire_and_forget
 def run_speak_thread():
+    global is_finish
     while True:
-        if len(speak_queue) > 0:
-            text, wav = speak_queue.pop(0)
-            print(f"[run_speak_thread] pop {text}")
-            since = time.time()
-            speak(text, wav)
-            print(
-                f"[run_speak_thread] spoken {text} | elapsed {time.time() - since:.2f} sec"
-            )
-        else:
-            time.sleep(0.5)
-        if is_finish:
+        try:
+            if len(speak_queue) > 0:
+                text, wav = speak_queue.pop(0)
+                print(f"[run_speak_thread] pop {text}")
+                since = time.time()
+                speak(text, wav)
+                print(
+                    f"[run_speak_thread] spoken {text} | elapsed {time.time() - since:.2f} sec"
+                )
+            else:
+                time.sleep(0.5)
+            if is_finish:
+                break
+        except Exception as e:
+            import traceback
+
+            print("error in run_speak_thread:", e)
+            print(traceback.format_exc())
+            is_finish = True
             break
 
 
@@ -235,6 +230,7 @@ def set_obs_current_mk8dx_info(n_coin, n_lap, omote, ura, place):
 
 latest_place = [0, "1"]
 
+
 @fire_and_forget
 def run_mk8dx():
     global is_finish, latest_place
@@ -247,25 +243,25 @@ def run_mk8dx():
                     break
 
                 since = time.time()
-                print("[run_mk8dx] start game capture", flush=True)
+                # print("[run_mk8dx] start game capture", flush=True)
                 img = game_capture()
-                print("[run_mk8dx] game capture", flush=True)
+                # print("[run_mk8dx] game capture", flush=True)
                 ret, result = parse_mk8dx_screen(img)
-                print("[run_mk8dx] parse_mk8dx_screen", flush=True)
+                # print("[run_mk8dx] parse_mk8dx_screen", flush=True)
                 if not ret:
                     continue
 
                 n_coin, n_lap, omote, ura, place = result
                 set_obs_current_mk8dx_info(n_coin, n_lap, omote, ura, place)
-                print("[run_mk8dx] set_obs_current_mk8dx_info", flush=True)
+                # print("[run_mk8dx] set_obs_current_mk8dx_info", flush=True)
 
                 # 喋ることがないときにマリカの話をさせる
                 if len(tts_queue) >= 1 or len(speak_queue) >= 1:
                     continue
-                
+
                 latest_place = place
                 answer = think_mk8dx(n_coin, n_lap, omote, ura, place)
-                print("[run_mk8dx] think_mk8dx")
+                # print("[run_mk8dx] think_mk8dx")
                 if len(answer) >= 1:
                     f.write(f"{place},{omote},{ura},{n_lap},{n_coin},{answer}\n")
                     f.flush()
@@ -291,18 +287,27 @@ def request_speak(text, wav):
 
 @fire_and_forget
 def run_tts_thread():
+    global is_finish
     while True:
-        if len(tts_queue) > 0:
-            text = tts_queue.pop(0)
-            since = time.time()
-            wav = tts(text)
-            request_speak(text, wav)
-            print(
-                f"[run_tts_thread] tts {text} | elapsed {time.time() - since:.2f} sec"
-            )
-        else:
-            time.sleep(0.5)
-        if is_finish:
+        try:
+            if len(tts_queue) > 0:
+                text = tts_queue.pop(0)
+                since = time.time()
+                wav = tts(text)
+                request_speak(text, wav)
+                print(
+                    f"[run_tts_thread] tts {text} | elapsed {time.time() - since:.2f} sec"
+                )
+            else:
+                time.sleep(0.5)
+            if is_finish:
+                break
+        except Exception as e:
+            import traceback
+
+            print("error in run_tts_thread:", e)
+            print(traceback.format_exc())
+            is_finish = True
             break
 
 
@@ -320,6 +325,8 @@ def speak(text, wav):
 
 
 async def main() -> None:
+    global is_finish
+
     init()
     obsTextChange("zundamon_zimaku", "")
 
@@ -333,45 +340,77 @@ async def main() -> None:
     chat_history = []
 
     while True:
-        since = time.time()
-        ret, author, prompt = listen()
-        if not ret:
-            if not args.mk8dx:
-                if time.time() - prev_comment_time > 45:
-                    soliloquy = random.choice(soliloquys)
-                    print("[main] soliloquy:", soliloquy)
-                    soliloquy_wav = tts(soliloquy)
-                    request_speak(soliloquy, soliloquy_wav)
-                    prev_comment_time = time.time()
-            continue
+        try:
+            since = time.time()
+            ret, author, prompt = listen()
+            if not ret:
+                if not args.mk8dx:
+                    if time.time() - prev_comment_time > 45:
+                        soliloquy = random.choice(soliloquys)
+                        print("[main] soliloquy:", soliloquy)
+                        soliloquy_wav = tts(soliloquy)
+                        request_speak(soliloquy, soliloquy_wav)
+                        prev_comment_time = time.time()
+                continue
 
-        if args.mk8dx and author == "furaga" and prompt == "nf":
-            # 特殊コマンドなので喋らせない
-            pass
-        else:
-            request_tts("「" + prompt + "」")
-            print("[main] listen:", prompt, f"| elapsed {time.time() - since:.2f} sec")
+            if args.mk8dx and author == "furaga" and prompt == "nf":
+                # ゴールの感想を述べさせる
+                _, answer = OpenAILLM.ask_gpt_mk8dx(
+                    0, 0, None, None, latest_place[1], nf=True
+                )
+                request_tts(answer)
+                print(
+                    "[main] think:", answer, f"| elapsed {time.time() - since:.2f} sec"
+                )
+                prev_comment_time = time.time()
+            elif args.mk8dx and author == "furaga" and prompt == "こんばんは":
+                # 開始の挨拶
+                request_tts("ずんだもんなのだ。今日はマリオカートをやっていくのだ")
+                request_tts("ずんだもんはあまりマリカが上手じゃないけれど、頑張ってプレイするのだ")
+                request_tts("さっそく始めるのだ")
+                prev_comment_time = time.time()
+            elif args.mk8dx and author == "furaga" and prompt == "そろそろ":
+                # 終わりの挨拶
+                request_tts("今日はこのへんで終わりにするのだ。楽しかったのだ")
+                request_tts("見てくれたみんなもありがとうなのだ")
+                request_tts("よかったらチャンネル登録と高評価お願いしますなのだ")
+                request_tts("次回の配信もぜひ見に来てほしいのだ")
+                request_tts("じゃあ、お疲れ様でした、なのだ！")
+                prev_comment_time = time.time()
+            else:
+                since = time.time()
+                request_tts("「" + prompt + "」")
+                print(
+                    "[main] listen:", prompt, f"| elapsed {time.time() - since:.2f} sec"
+                )
+                answer = think(author, prompt, chat_history)
 
-        since = time.time()
+                if len(answer) <= 0:
+                    answer = random.choice(
+                        [
+                            "何を言っているかわからないのだ",
+                            "訳のわからないことを言うななのだ",
+                        ]
+                    )
+                request_tts(answer)
+                print(
+                    "[main] think:", answer, f"| elapsed {time.time() - since:.2f} sec"
+                )
+                since = time.time()
 
-        answer = think(author, prompt, chat_history)
-        if len(answer) <= 0:
-            answer = random.choice(
-                [
-                    "何を言っているかわからないのだ",
-                    "訳のわからないことを言うななのだ",
-                ]
-            )
-        request_tts(answer)
-        print("[main] think:", answer, f"| elapsed {time.time() - since:.2f} sec")
-        since = time.time()
+                chat_history.append({"role": "system", "content": "User: " + prompt})
+                chat_history.append({"role": "system", "content": "ずんだもん: " + answer})
+                if len(chat_history) > 5:
+                    chat_history = chat_history[-5:]
 
-        chat_history.append({"role": "system", "content": "User: " + prompt})
-        chat_history.append({"role": "system", "content": "ずんだもん: " + answer})
-        if len(chat_history) > 5:
-            chat_history = chat_history[-5:]
+                prev_comment_time = time.time()
+        except Exception as e:
+            import traceback
 
-        prev_comment_time = time.time()
+            print("error in run_tts_thread:", e)
+            print(traceback.format_exc())
+            is_finish = True
+            break
 
 
 if __name__ == "__main__":
