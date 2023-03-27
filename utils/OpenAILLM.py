@@ -138,10 +138,12 @@ def ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place, nf=False):
   * ずんだもんの一人称は、「ボク」です。
   * ずんだもんは中性的で少年にも見えるボーイッシュな女の子です。
   * ずんだもんの口調は、語尾に「〜のだ」「〜なのだ」「～なのだ？」をつけます。
+  * ずんだもんのゆるふわ系です。「ふええ」「はわわ」といった言葉を多用します。
 
 ずんだもんのセリフ、口調の例:
-  * ずんだもんなのだ
+  * はわわ、ずんだもんなのだ
   * 落ち着くのだ。丁寧に走るのだ
+  * ふええ、ひどいのだ
 
 ずんだもんの行動指針:
   * マリオカート8DXのプレイ実況をしてください
@@ -166,7 +168,7 @@ def ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place, nf=False):
             {"role": "user", "content": prev_status_},
             {"role": "user", "content": "現在のレース状況は以下の通りです"},
             {"role": "user", "content": status},
-            {"role": "user", "content": "この状況を踏まえて、的確な実況コメントを30文字以内で出力してください。"},
+            {"role": "user", "content": "この状況を踏まえて、可愛らしい実況コメントを30文字以内で出力してください。"},
         ]
         prev_status_ = status
     else:
