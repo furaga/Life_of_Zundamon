@@ -1,3 +1,4 @@
+import asyncio
 import requests
 import pytchat
 import obswebsocket
@@ -32,12 +33,24 @@ chat = pytchat.create(video_id=args.chat_video_id)
 # voicevox
 speaker = 1  # ずんだもん
 
-current_gpt_prefix_index = 0
-
-with open("data/soliloquys.txt", encoding="utf8") as f:
-    soliloquys = [line.strip() for line in f if len(line.strip()) > 1]
+#
+soliloquys = []
 
 
+speak_queue = []
+tts_queue = []
+is_finish = False
+
+mk8dx_history = []
+
+latest_place = [0, "1"]
+
+during_tts_ = False
+
+
+#
+# OBS操作
+#
 def obsTextChange(source_name: str, strtext: str):
     ws.call(
         obswebsocket.requests.SetSourceSettings(
@@ -46,7 +59,23 @@ def obsTextChange(source_name: str, strtext: str):
     )
 
 
+def obs_game_capture():
+    out_path = Path(os.getcwd()) / "__tmp__.jpg"
+    ws.call(
+        obswebsocket.requests.TakeSourceScreenshot(
+            sourceName="映像キャプチャデバイス",
+            embedPictureFormat="jpg",
+            saveToFilePath=str(out_path).replace("\\", "/"),
+        )
+    )
+    img = cv2.imread(str(out_path))
+    return img
+
+
 def init():
+    global soliloquys
+    with open("data/soliloquys.txt", encoding="utf8") as f:
+        soliloquys = [line.strip() for line in f if len(line.strip()) > 1]
     OpenAILLM.init_openai()
     ws.connect()
 
@@ -65,8 +94,6 @@ def listen():
 
 
 def think(author, prompt, chat_history):
-    global current_gpt_prefix_index
-
     # ハードコード
     if "初見" in prompt:
         return random.choice(
@@ -86,9 +113,6 @@ def think(author, prompt, chat_history):
     return response["dialogue"]
 
 
-during_tts_ = False
-
-
 def tts(text):
     global during_tts_
     during_tts_ = True
@@ -106,9 +130,6 @@ def tts(text):
     return res2.content
 
 
-import asyncio
-
-
 def fire_and_forget(func):
     def wrapper(*args, **kwargs):
         loop = asyncio.new_event_loop()
@@ -116,11 +137,6 @@ def fire_and_forget(func):
         return loop.run_in_executor(None, func, *args, *kwargs)
 
     return wrapper
-
-
-speak_queue = []
-tts_queue = []
-is_finish = False
 
 
 @fire_and_forget
@@ -147,22 +163,6 @@ def run_speak_thread():
             print(traceback.format_exc())
             is_finish = True
             break
-
-
-def game_capture():
-    out_path = Path(os.getcwd()) / "__tmp__.jpg"
-    ws.call(
-        obswebsocket.requests.TakeSourceScreenshot(
-            sourceName="映像キャプチャデバイス",
-            embedPictureFormat="jpg",
-            saveToFilePath=str(out_path).replace("\\", "/"),
-        )
-    )
-    img = cv2.imread(str(out_path))
-    return img
-
-
-mk8dx_history = []
 
 
 def parse_mk8dx_screen(img):
@@ -234,9 +234,6 @@ def set_obs_current_mk8dx_info(n_coin, n_lap, omote, ura, place):
     obsTextChange("current_mk8dx_info", text)
 
 
-latest_place = [0, "1"]
-
-
 @fire_and_forget
 def run_mk8dx():
     global is_finish, latest_place
@@ -250,7 +247,7 @@ def run_mk8dx():
 
                 since = time.time()
                 # print("[run_mk8dx] start game capture", flush=True)
-                img = game_capture()
+                img = obs_game_capture()
                 # print("[run_mk8dx] game capture", flush=True)
                 ret, result = parse_mk8dx_screen(img)
                 # print("[run_mk8dx] parse_mk8dx_screen", flush=True)
