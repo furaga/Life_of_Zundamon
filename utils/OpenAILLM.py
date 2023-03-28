@@ -6,15 +6,15 @@ import re
 import json
 from pathlib import Path
 
-prompt_path_ = Path(".")
-prompt_dict_ = {}
+prompt_path_ = None
+prompt_data_ = {}
 prev_mk8dx_status_ = ""
 format_cache_ = {}
 
 
 def load_format(msg):
     rel_path = msg["role"].split("@")[1].strip()
-    path = prompt_path_ / rel_path
+    path = prompt_path_.parent / rel_path
     if str(path) not in format_cache_:
         with open(path, "r", encoding="utf-8") as f:
             format_cache_[str(path)] = f.read().strip()
@@ -24,7 +24,7 @@ def load_format(msg):
 def make_prompt(question, chat_history):
     prompt = []
 
-    for msg in prompt_dict_["default"]:
+    for msg in prompt_data_["default"]:
         if msg["role"].startswith("personality@"):
             prompt.append({"role": "user", "content": load_format(msg)})
         elif msg["role"] == "question@":
@@ -37,35 +37,43 @@ def make_prompt(question, chat_history):
     return prompt
 
 
-def chat_completion(prompt: List, timeout: float) -> Tuple(bool, Dict):
+def chat_completion(prompt: List, timeout: float) -> Tuple[bool, str]:
+    import traceback
+
     for _ in range(3):
         try:
+            print(f"[chat_completion] start", flush=True)
             since = time.time()
-            print(f"[ask_gpt] ChatCompletion start", flush=True)
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=prompt,
-                timeout=10,
+                request_timeout=timeout,
             )
             content = response["choices"][0]["message"]["content"]
-            print(f"[ask_gpt] ChatCompletion finish", flush=True)
+            print(
+                f"[chat_completion] content={content} | Elapsed {time.time() - since:.2f} sec",
+                flush=True,
+            )
             return True, content
-        except openai.error.RateLimitError:
-            print("[ask_gpt] rate limit error")
-            time.sleep(1)
-        except openai.error.APIError:
-            print("[ask_gpt] API error")
-            time.sleep(1)
-        except:
-            print("[ask_gpt] API error")
-            time.sleep(1)
-    return False, {}
+        except openai.error.RateLimitError as e:
+            print("Prompt:", prompt, flush=True)
+            print(str(e), "\n", traceback.format_exc(), flush=True)
+            time.sleep(0.1)
+        except openai.error.APIError as e:
+            print("Prompt:", prompt, flush=True)
+            print(str(e), "\n", traceback.format_exc(), flush=True)
+            time.sleep(0.1)
+        except Exception as e:
+            print("Prompt:", prompt, flush=True)
+            print(str(e), "\n", traceback.format_exc(), flush=True)
+            time.sleep(0.1)
+    return False, ""
 
 
 def chat_completion_postprocess(content: str) -> str:
     def remove_after(content, chars):
         for ch in chars:
-            pos = content.index(ch)
+            pos = content.find(ch)
             if pos >= 0:
                 content = content[:pos]
         return content
@@ -79,7 +87,7 @@ def chat_completion_postprocess(content: str) -> str:
 
     # 文の先頭・末尾から余計な文字を消す
     ignore_chars = '<@.+>「」()#。"' + "'"
-    content.strip(ignore_chars)
+    content = content.strip(ignore_chars)
 
     # 文中の()や#をけす
     content = remove_after(content, "()#")
@@ -87,7 +95,7 @@ def chat_completion_postprocess(content: str) -> str:
     return content
 
 
-def ask(text: str, chat_history: List, timeout: float = 8) -> Tuple(bool, str):
+def ask(text: str, chat_history: List, timeout: float = 8) -> Tuple[bool, str]:
     text = re.sub("<@.+>", "", text)
     prompt = make_prompt(text, chat_history)
     ret, content = chat_completion(prompt, timeout)
@@ -97,12 +105,19 @@ def ask(text: str, chat_history: List, timeout: float = 8) -> Tuple(bool, str):
     return ret, answer
 
 
-def make_prompt_mk8dx_race(n_coin, n_lap, omote, ura, place, chat_history):
+#
+# MK8dx
+#
+
+
+def make_prompt_mk8dx_race(
+    n_coin: int, n_lap: int, omote: str, ura: str, place: str, chat_history: List
+):
     global prev_mk8dx_status_
 
     prompt = []
 
-    for msg in prompt_dict_["mk8dx_race"]:
+    for msg in prompt_data_["mk8dx_race"]:
         if msg["role"].startswith("personality@"):
             prompt.append({"role": "user", "content": load_format(msg)})
         elif msg["role"] == "chat_history@":
@@ -122,14 +137,14 @@ def make_prompt_mk8dx_race(n_coin, n_lap, omote, ura, place, chat_history):
 def make_prompt_mk8dx_result(place, chat_history):
     prompt = []
 
-    for msg in prompt_dict_["mk8dx_race"]:
+    for msg in prompt_data_["mk8dx_result"]:
         if msg["role"].startswith("personality@"):
             prompt.append({"role": "user", "content": load_format(msg)})
         elif msg["role"] == "chat_history@":
             prompt += chat_history
-        elif msg["role"] == "result@":
+        elif msg["role"].startswith("result@"):
             prompt.append({"role": "user", "content": load_format(msg).format(place)})
-        elif msg["role"] == "impression@":
+        elif msg["role"].startswith("impression@"):
             prompt.append({"role": "user", "content": load_format(msg).format(place)})
         else:
             prompt.append(msg)
@@ -137,11 +152,9 @@ def make_prompt_mk8dx_result(place, chat_history):
     return prompt
 
 
-def ask_mk8dx(
-    n_coin, n_lap, omote, ura, place, chat_history, race_mode=True, timeout=8
-):
+def ask_mk8dx(n_coin, n_lap, omote, ura, place, chat_history, is_race_mode, timeout=8):
     global prev_mk8dx_status_
-    if race_mode:
+    if is_race_mode:
         prompt = make_prompt_mk8dx_race(n_coin, n_lap, omote, ura, place, chat_history)
     else:
         prompt = make_prompt_mk8dx_result(place, chat_history)
@@ -159,25 +172,34 @@ def reset_mk8dx():
     prev_mk8dx_status_ = ""
 
 
-def init_openai(prompt_path):
-    global prompt_dict_, prompt_path_
+#
+# Initialize
+#
+def init_openai(prompt_path: Path):
+    global prompt_data_, prompt_path_
 
     openai.api_key = os.environ.get("OPENAI_API_KEY")
 
     # load json file
-    with open(prompt_path, "r") as f:
+    with open(prompt_path, "r", encoding="utf8") as f:
         prompt_path_ = prompt_path
-        prompt_dict_ = json.load(f)
+        prompt_data_ = json.load(f)
 
 
 if __name__ == "__main__":
 
     def main() -> None:
-        init_openai()
+        init_openai(Path("../data/config/mk8dx/prompt.json"))
 
         while True:
             prompt = input("Input:")
-            _, answer = ask(prompt, [])
-            print("Answer:", answer)
+            ret, answer = ask(prompt, [])
+            print("Answer(ask              ):", ret, answer)
+
+            ret, answer = ask_mk8dx(5, 3, "キラー", "スター", "10", [], True)
+            print("Answer(ask_mk8dx, race  ):", ret, answer)
+
+            ret, answer = ask_mk8dx(0, 0, "", "", "1", [], False)
+            print("Answer(ask_mk8dx, result):", ret, answer)
 
     main()
