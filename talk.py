@@ -106,7 +106,7 @@ def think(author, prompt, chat_history):
         )
 
     # OpenAI APIで回答生成
-    ret, response = OpenAILLM.ask_gpt(prompt, chat_history)
+    ret, response = OpenAILLM.ask(prompt, chat_history)
     print("[think]", ret, response)
     if not ret:
         return ""
@@ -219,7 +219,15 @@ def parse_mk8dx_screen(img):
 
 def think_mk8dx(n_coin, n_lap, omote, ura, place):
     # OpenAI APIで回答生成
-    ret, answer = OpenAILLM.ask_gpt_mk8dx(n_coin, n_lap, omote[1], ura[1], place[1])
+    ret, answer = OpenAILLM.ask_mk8dx(
+        n_coin,
+        n_lap,
+        omote[1],
+        ura[1],
+        place[1],
+        chat_history=[],
+        race_mode=True,
+    )
     answer = answer.replace("「", "").replace("」", "")
     if not ret:
         return ""
@@ -369,8 +377,14 @@ async def main() -> None:
 
             if args.mk8dx and author == "furaga" and prompt == "nf":
                 # ゴールの感想を述べさせる
-                _, answer = OpenAILLM.ask_gpt_mk8dx(
-                    0, 0, None, None, latest_place[1], nf=True
+                _, answer = OpenAILLM.ask_mk8dx(
+                    0,
+                    0,
+                    None,
+                    None,
+                    latest_place[1],
+                    chat_history=[],
+                    race_mode=False,
                 )
                 request_tts(answer)
                 print(
