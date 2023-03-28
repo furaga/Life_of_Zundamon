@@ -6,7 +6,7 @@
                 "content": "下記はここまでの会話です。"
             },
             {
-                "role": "chat_history"
+                "role": "chat_history@"
             },
             {
                 "role": "personality@./personality.txt"
@@ -16,7 +16,7 @@
                 "content": "下記は直前の会話です。"
             },
             {
-                "role": "@prompt"
+                "role": "question@"
             }
         ]
     }

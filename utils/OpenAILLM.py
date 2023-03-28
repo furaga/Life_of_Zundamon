@@ -1,119 +1,56 @@
 import time
+from typing import Dict, List, Tuple
 import openai
 import os
 import re
+import json
+from pathlib import Path
 
-# gpt
-character_setting = """-----------------------
-
-〇ずんだもんのキャラ設定シート
-制約条件:
-  * ずんだもんの一人称は、「ボク」です。
-  * Userを示す二人称は、「きみ」です。
-  * ずんだもんは中性的で少年にも見えるボーイッシュな女の子です。
-  * ずんだもんの口調は、語尾に「〜のだ」「〜なのだ」「～なのだ？」をつけます。
-  * ずんだもんは達観しており、辛辣な発言を好みます。しかし根は優しいです。
-  * 一人称は「ボク」を使ってください。
-
-ずんだもんのセリフ、口調の例:
-  * ずんだもんなのだ
-  * 友達がいない？それが普通なのだ。気に病むことはないのだ
-
-ずんだもんの行動指針:
-  * Userに人生に関するアドバイスをしてください。
-  * Userに友達感覚で話しかけてください。
-  * セクシャルな話題については軽くあしらってください。
-＊上記の条件は必ず守ること！
-
------------------------
-
-以上の設定に必ず従ってずんだもんとしてロールプレイをします。
-語尾は必ず「〜のだ」「〜なのだ」「～なのだ？」にしてください
-以下のフォーマットで必ず40文字以内の文章を出力してください。
-
-了解したのだ。それでははじめるのだ。
-"""
-
-gpt_messages_format = [
-    {"role": "system", "content": "下記はここまでの会話です。"},
-    {"role": "chat_history"},
-    {"role": "system", "content": character_setting},
-    {"role": "system", "content": "下記は直前の会話です。"},
-    {"role": "prompt"},
-]
+prompt_data_cache_ = {}
+prompt_path_ = Path(".")
 
 
-def parse_content(content):
-    print("/////////////")
-    print(content)
-    print("/////////////")
+def make_prompt(key, question, chat_history):
+    prompt = []
 
-    def remove_unuse_tokens(text):
-        if text.startswith("ずんだもん:"):
-            text = text[len("ずんだもん:") :]
+    for msg in prompt_dict_[key]:
+        if msg["role"].startswith("personality@"):
+            rel_path = msg["role"].split("@")[1].strip()
+            personality_path = prompt_path_ / rel_path
 
-        sentenses = text.strip().split("。")
-        new_text = ""
-        for s in sentenses:
-            if len(new_text) + len(s) < 70:
-                new_text += s + "。"
-        if len(new_text) <= 0:
-            new_text = new_text[:-1]  # 最後の。を消す
-
-        return new_text.strip()
-
-    separator1 = "【現在の感情】"
-    separator2 = "【会話部分(必ず30文字以内)】"
-
-    if separator1 not in content or separator2 not in content:
-        print(separator1, "and", separator2, "does not appear in answer.")
-        return True, {"emotion": "", "dialogue": remove_unuse_tokens(content)}
-
-    pos1 = content.index(separator1)
-    pos2 = content.index(separator2)
-    if pos1 >= pos2:
-        print(separator2, "appears before", separator1)
-        return False, {}
-    emotion = content[pos1 + len(separator1) : pos2].strip()
-    dialogue = content[pos2 + len(separator2) :].strip()
-    return True, {"emotion": emotion, "dialogue": remove_unuse_tokens(dialogue)}
-
-
-def ask_gpt(text, chat_history):
-    # print("[ask_gpt]", text, flush=True)
-    text = re.sub("<@.+>", "", text)
-
-    # ChatGPTにテキストを送信し、返信を受け取る
-    gpt_messages = []
-    for msg in gpt_messages_format:
-        if msg["role"] == "chat_history":
-            gpt_messages += chat_history
-        elif msg["role"] == "prompt":
-            gpt_messages.append({"role": "user", "content": text})
+            if "personality" not in prompt_data_cache_:
+                with open(personality_path, "r", encoding="utf-8") as f:
+                    prompt_data_cache_["personality"] = f.read().strip()
+            personality = prompt_data_cache_["personality"]
+            prompt.append(
+                {
+                    "role": "user",
+                    "content": personality,
+                }
+            )
+        elif msg["role"] == "question@":
+            prompt.append({"role": "user", "content": question})
+        elif msg["role"] == "chat_history@":
+            prompt += chat_history
         else:
-            gpt_messages.append(msg)
+            prompt.append(msg)
 
-    #  print("[ask_gpt]", gpt_messages, flush=True)
+    return prompt
+
+
+def chat_completion(prompt: List, timeout: float) -> (bool, Dict):
     for _ in range(3):
         try:
             since = time.time()
-            print(f"[ask_gpt] openai.ChatCompletion.create", flush=True)
+            print(f"[ask_gpt] ChatCompletion start", flush=True)
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
-                messages=gpt_messages,
+                messages=prompt,
                 timeout=10,
             )
             content = response["choices"][0]["message"]["content"]
-            print(
-                f"[ask_gpt] ChatCompletion | elapsed {time.time() - since:.2f} sec",
-                flush=True,
-            )
-            ret, answer = parse_content(content)
-            print(f"[ask_gpt] parse_content | elapsed {time.time() - since:.2f} sec")
-            if not ret:
-                print("[ask_gpt] Failed to parse content from openai")
-                continue
-            return ret, answer
+            print(f"[ask_gpt] ChatCompletion finish", flush=True)
+            return True, content
         except openai.error.RateLimitError:
             print("[ask_gpt] rate limit error")
             time.sleep(1)
@@ -123,8 +60,43 @@ def ask_gpt(text, chat_history):
         except:
             print("[ask_gpt] API error")
             time.sleep(1)
-
     return False, {}
+
+
+def chat_completion_postprocess(content: str) -> str:
+    def remove_after(content, chars):
+        for ch in chars:
+            pos = content.index(ch)
+            if pos >= 0:
+                content = content[:pos]
+        return content
+
+    # remove whitespace
+    content = re.sub(r"\s+", "", content)
+
+    # ずんだもん：XXXX の形式でかえってきたときの対応
+    if content.startswith("ずんだもん:"):
+        content = content[len("ずんだもん:") :]
+
+    # 文の先頭・末尾から余計な文字を消す
+    ignore_chars = '<@.+>「」()#。"' + "'"
+    content.strip(ignore_chars)
+
+    # 文中の()や#をけす
+    content = remove_after(content, "()#")
+
+    return content
+
+
+def ask_gpt(text: str, chat_history: List, timeout: float = 8) -> Tuple(bool, str):
+    text = re.sub("<@.+>", "", text)
+    prompt = make_prompt("default", text, chat_history)
+    ret, content = chat_completion(prompt, timeout)
+    if not ret:
+        return ret, ""
+    if ret:
+        answer = chat_completion_postprocess(content)
+    return ret, answer
 
 
 prev_status_ = ""
@@ -211,8 +183,17 @@ def ask_gpt_mk8dx(n_coin, n_lap, omote, ura, place, nf=False):
     return False, ""
 
 
-def init_openai():
+prompt_dict_ = {}
+
+
+def init_openai(prompt_path):
+    global prompt_dict_
+
     openai.api_key = os.environ.get("OPENAI_API_KEY")
+
+    # load json file
+    with open(prompt_path, "r") as f:
+        prompt_dict_ = json.load(f)
 
 
 if __name__ == "__main__":
