@@ -175,7 +175,7 @@ def reset_mk8dx():
 #
 # Initialize
 #
-def init_openai(prompt_path: Path):
+def init(prompt_path: Path):
     global prompt_data_, prompt_path_
 
     openai.api_key = os.environ.get("OPENAI_API_KEY")
@@ -189,7 +189,7 @@ def init_openai(prompt_path: Path):
 if __name__ == "__main__":
 
     def main() -> None:
-        init_openai(Path("../data/config/mk8dx/prompt.json"))
+        init(Path("../data/config/mk8dx/prompt.json"))
 
         while True:
             prompt = input("Input:")
