@@ -11,21 +11,23 @@ import os
 from pathlib import Path
 import cv2
 
+from utils.asyncio_util import fire_and_forget
 from utils import MK8DX
 from utils import OpenAILLM
+from utils import OBS
+
 
 # コマンド引数
-parser = argparse.ArgumentParser(description="TALK")
-parser.add_argument("--obs_pass", type=str, required=True, help="OBS Websocketのパスワード")
-parser.add_argument("--chat_video_id", type=str, required=True, help="YouTubeの動画ID")
-parser.add_argument("--mk8dx", action="store_true")
-args = parser.parse_args()
+def parse_args():
+    parser = argparse.ArgumentParser(description="TALK")
+    parser.add_argument(
+        "--obs_pass", type=str, required=True, help="OBS Websocketのパスワード"
+    )
+    parser.add_argument("--chat_video_id", type=str, required=True, help="YouTubeの動画ID")
+    parser.add_argument("--mk8dx", action="store_true")
+    args = parser.parse_args()
+    return args
 
-# obswebsocket
-host = "localhost"
-port = 4444
-password = args.obs_pass
-ws = obswebsocket.obsws(host, port, password)
 
 # pytchat
 chat = pytchat.create(video_id=args.chat_video_id)
@@ -34,7 +36,7 @@ chat = pytchat.create(video_id=args.chat_video_id)
 speaker = 1  # ずんだもん
 
 #
-soliloquys = []
+all_monologues = []
 
 
 speak_queue = []
@@ -48,39 +50,19 @@ latest_place = [0, "1"]
 during_tts_ = False
 
 
-#
-# OBS操作
-#
-def obsTextChange(source_name: str, strtext: str):
-    ws.call(
-        obswebsocket.requests.SetSourceSettings(
-            sourceName=source_name, sourceSettings={"text": strtext}
-        )
-    )
+def init(args):
+    OpenAILLM.init("data/config/mk8dx/prompt.json")
+    OBS.init(args.obs_pass)
+    if args.mk8dx:
+        MK8DX.init(Path("data/mk8dx_images"))
 
-
-def obs_game_capture():
-    out_path = Path(os.getcwd()) / "__tmp__.jpg"
-    ws.call(
-        obswebsocket.requests.TakeSourceScreenshot(
-            sourceName="映像キャプチャデバイス",
-            embedPictureFormat="jpg",
-            saveToFilePath=str(out_path).replace("\\", "/"),
-        )
-    )
-    img = cv2.imread(str(out_path))
-    return img
-
-
-def init():
-    global soliloquys
+    # 独り言を読み込む
+    global all_monologues
     with open("data/soliloquys.txt", encoding="utf8") as f:
-        soliloquys = [line.strip() for line in f if len(line.strip()) > 1]
-    OpenAILLM.init_openai("data/config/mk8dx/prompt.json")
-    ws.connect()
+        all_monologues = [line.strip() for line in f if len(line.strip()) > 1]
 
 
-def listen():
+def youtube_listen_chat():
     global is_finish
     if not chat.is_alive():
         print("[listen] ERROR: chat is dead.")
@@ -109,7 +91,12 @@ def think(author, prompt, chat_history):
     ret, response = OpenAILLM.ask(prompt, chat_history)
     print("[think]", ret, response)
     if not ret:
-        return ""
+        return random.choice(
+            [
+                "何を言っているかわからないのだ",
+                "訳のわからないことを言うななのだ",
+            ]
+        )
     return response["dialogue"]
 
 
@@ -130,17 +117,8 @@ def tts(text):
     return res2.content
 
 
-def fire_and_forget(func):
-    def wrapper(*args, **kwargs):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        return loop.run_in_executor(None, func, *args, *kwargs)
-
-    return wrapper
-
-
 @fire_and_forget
-def run_speak_thread():
+def run_speak_loop():
     global is_finish
     while True:
         try:
@@ -239,14 +217,12 @@ def set_obs_current_mk8dx_info(n_coin, n_lap, omote, ura, place):
     text += f"アイテム: {omote[1]}, {ura[1]}\n"
     text += f"コイン: {n_coin}枚\n"
     text += f"ラップ: {n_lap}週目\n"
-    obsTextChange("current_mk8dx_info", text)
+    OBS.set_text("current_mk8dx_info", text)
 
 
 @fire_and_forget
-def run_mk8dx():
+def run_mk8dx_loop():
     global is_finish, latest_place
-    MK8DX.init(Path("data/mk8dx_images"))
-    set_obs_current_mk8dx_info(0, 0, [1, "--"], [1, "--"], [1, "--"])
     with open("mk8dx_chat_history.txt", "a", encoding="utf8") as f:
         while True:
             try:
@@ -255,7 +231,7 @@ def run_mk8dx():
 
                 since = time.time()
                 # print("[run_mk8dx] start game capture", flush=True)
-                img = obs_game_capture()
+                img = OBS.capture_game_screen()
                 # print("[run_mk8dx] game capture", flush=True)
                 ret, result = parse_mk8dx_screen(img)
                 # print("[run_mk8dx] parse_mk8dx_screen", flush=True)
@@ -301,7 +277,7 @@ def request_speak(text, wav):
 
 
 @fire_and_forget
-def run_tts_thread():
+def run_tts_loop():
     global is_finish
     while True:
         try:
@@ -332,7 +308,7 @@ def request_tts(text):
 
 def speak(text, wav):
     # OBSの字幕変更
-    obsTextChange("zundamon_zimaku", text)
+    OBS.set_text("zundamon_zimaku", text)
 
     # 音声再生
     play_obj = simpleaudio.play_buffer(wav, 1, 2, 24000)
@@ -342,97 +318,101 @@ def speak(text, wav):
 def reset_mk8dx():
     global mk8dx_history
     mk8dx_history = []
-    obsTextChange("zundamon_zimaku", "")
+    OBS.set_text("zundamon_zimaku", "")
     set_obs_current_mk8dx_info(0, 0, [1, "--"], [1, "--"], [1, "--"])
 
 
-async def main() -> None:
+# ランダムで流す独白
+def think_monologues():
+    return random.choice(all_monologues)
+
+
+# 決め打ちのセリフ・処理
+def play_scenario(author, question, mk8dx: bool):
+    if mk8dx and author == "furaga" and question == "nf":
+        # ゴールの感想を述べさせる
+        _, answer = OpenAILLM.ask_mk8dx(
+            0,
+            0,
+            None,
+            None,
+            latest_place[1],
+            chat_history=[],
+            race_mode=False,
+        )
+        request_tts(answer)
+        print("[main] think:", answer, f"| elapsed {time.time() - since:.2f} sec")
+        reset_mk8dx()
+        return True
+    elif mk8dx and author == "furaga" and question == "こんばんは":
+        # 開始の挨拶
+        request_tts("ずんだもんなのだ。今日もマリオカートをやっていくのだ")
+        request_tts("まだまだ上手ではないけれど、一生懸命プレイするのだ。みんなも楽しんでほしいのだ")
+        request_tts("コメントもどんどんしてほしいのだ。よろしくなのだ")
+        request_tts("さっそく始めるのだ")
+        return True
+    elif mk8dx and author == "furaga" and question == "そろそろ":
+        # 終わりの挨拶
+        request_tts("今日はこのへんで終わりにするのだ。楽しかったのだ")
+        request_tts("見てくれたみんなもありがとうなのだ")
+        request_tts("よかったらチャンネル登録と高評価お願いしますなのだ")
+        request_tts("次回の配信もぜひ見に来てほしいのだ")
+        request_tts("じゃあ、お疲れ様でした、なのだ！")
+        return True
+
+    return False
+
+
+async def main(args) -> None:
     global is_finish
 
+    # 初期化
     init()
-    obsTextChange("zundamon_zimaku", "")
 
-    run_tts_thread()
-    run_speak_thread()
-
+    # 並行処理を起動
+    run_tts_loop()
+    run_speak_loop()
     if args.mk8dx:
-        run_mk8dx()
+        run_mk8dx_loop()
 
-    prev_comment_time = time.time()
+    prev_talked_time = time.time()
     chat_history = []
-
     while True:
         try:
             since = time.time()
-            ret, author, prompt = listen()
+            ret, author, question = youtube_listen_chat()
+
+            # 45秒間なにも喋らなかったら、自分で話す
+            if not ret and not args.mk8dx and time.time() - prev_talked_time > 45:
+                monologue = think_monologues()
+                print("[main] soliloquy:", monologue)
+                request_tts(monologue)
+
             if not ret:
-                if not args.mk8dx:
-                    if time.time() - prev_comment_time > 45:
-                        soliloquy = random.choice(soliloquys)
-                        print("[main] soliloquy:", soliloquy)
-                        soliloquy_wav = tts(soliloquy)
-                        request_speak(soliloquy, soliloquy_wav)
-                        prev_comment_time = time.time()
+                prev_talked_time = time.time()
                 continue
 
-            if args.mk8dx and author == "furaga" and prompt == "nf":
-                # ゴールの感想を述べさせる
-                _, answer = OpenAILLM.ask_mk8dx(
-                    0,
-                    0,
-                    None,
-                    None,
-                    latest_place[1],
-                    chat_history=[],
-                    race_mode=False,
-                )
-                request_tts(answer)
-                print(
-                    "[main] think:", answer, f"| elapsed {time.time() - since:.2f} sec"
-                )
-                reset_mk8dx()
-                prev_comment_time = time.time()
-            elif args.mk8dx and author == "furaga" and prompt == "こんばんは":
-                # 開始の挨拶
-                request_tts("ずんだもんなのだ。今日はマリオカートをやっていくのだ")
-                request_tts("ずんだもんはあまりマリカが上手じゃないけれど、頑張ってプレイするのだ")
-                request_tts("さっそく始めるのだ")
-                prev_comment_time = time.time()
-            elif args.mk8dx and author == "furaga" and prompt == "そろそろ":
-                # 終わりの挨拶
-                request_tts("今日はこのへんで終わりにするのだ。楽しかったのだ")
-                request_tts("見てくれたみんなもありがとうなのだ")
-                request_tts("よかったらチャンネル登録と高評価お願いしますなのだ")
-                request_tts("次回の配信もぜひ見に来てほしいのだ")
-                request_tts("じゃあ、お疲れ様でした、なのだ！")
-                prev_comment_time = time.time()
-            else:
-                since = time.time()
-                request_tts("「" + prompt + "」")
-                print(
-                    "[main] listen:", prompt, f"| elapsed {time.time() - since:.2f} sec"
-                )
-                answer = think(author, prompt, chat_history)
+            # 特定ワードで決め打ちの処理を行う
+            talked_any = play_scenario(author, question, args.mk8dx)
+            if talked_any:
+                prev_talked_time = time.time()
+                continue
 
-                if len(answer) <= 0:
-                    answer = random.choice(
-                        [
-                            "何を言っているかわからないのだ",
-                            "訳のわからないことを言うななのだ",
-                        ]
-                    )
-                request_tts(answer)
-                print(
-                    "[main] think:", answer, f"| elapsed {time.time() - since:.2f} sec"
-                )
-                since = time.time()
+            # 質問文を読み上げる
+            request_tts("「" + question + "」")
 
-                chat_history.append({"role": "system", "content": "User: " + prompt})
-                chat_history.append({"role": "system", "content": "ずんだもん: " + answer})
-                if len(chat_history) > 5:
-                    chat_history = chat_history[-5:]
+            # 回答を考える
+            answer = think(author, question, chat_history)
 
-                prev_comment_time = time.time()
+            # 回答を読み上げる
+            request_tts(answer)
+
+            chat_history.append({"role": "system", "content": "User: " + question})
+            chat_history.append({"role": "system", "content": "ずんだもん: " + answer})
+            if len(chat_history) > 5:
+                chat_history = chat_history[-5:]
+
+            prev_talked_time = time.time()
         except Exception as e:
             import traceback
 
@@ -443,4 +423,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main(parse_args()))
