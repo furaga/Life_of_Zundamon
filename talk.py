@@ -29,6 +29,7 @@ def parse_args():
 
 BOT_NAME = "ずんだもん"
 chat_history_ = []
+mk8dx_ = False
 
 # pytchat
 chat = pytchat.create(video_id=args.chat_video_id)
@@ -51,18 +52,9 @@ latest_place = [0, "1"]
 during_tts_ = False
 
 
-def init(args):
-    OpenAILLM.init("data/config/mk8dx/prompt.json")
-    OBS.init(args.obs_pass)
-    if args.mk8dx:
-        MK8DX.init(Path("data/mk8dx_images"))
-
-    # 独り言を読み込む
-    global all_monologues
-    with open("data/soliloquys.txt", encoding="utf8") as f:
-        all_monologues = [line.strip() for line in f if len(line.strip()) > 1]
-
-
+#
+# YouTubeのチャットを監視する
+#
 def youtube_listen_chat():
     global is_finish
     if not chat.is_alive():
@@ -76,9 +68,15 @@ def youtube_listen_chat():
     return True, chats[-1].author.name, chats[-1].message
 
 
-def think(author, prompt):
+#
+# think: ずんだもんのセリフを考える
+#
+
+
+# チャットへの回答を考える
+def think(author, question):
     # ハードコード
-    if "初見" in prompt:
+    if "初見" in question:
         return random.choice(
             [
                 "初見は帰るのだ",
@@ -89,7 +87,7 @@ def think(author, prompt):
         )
 
     # OpenAI APIで回答生成
-    ret, response = OpenAILLM.ask(prompt, chat_history_)
+    ret, response = OpenAILLM.ask(question, chat_history_)
     print("[think]", ret, response)
     if not ret:
         return random.choice(
@@ -99,6 +97,92 @@ def think(author, prompt):
             ]
         )
     return response["dialogue"]
+
+
+def think_mk8dx(n_coin, n_lap, omote, ura, place):
+    # OpenAI APIで回答生成
+    ret, answer = OpenAILLM.ask_mk8dx(
+        n_coin,
+        n_lap,
+        omote[1],
+        ura[1],
+        place[1],
+        chat_history=[],
+        race_mode=True,
+    )
+    answer = answer.replace("「", "").replace("」", "")
+    if not ret:
+        return ""
+    return answer
+
+
+# ランダムで流す独白
+def think_monologues():
+    return random.choice(all_monologues)
+
+
+# 決め打ちのセリフ・処理
+def play_scenario(author, question, mk8dx: bool):
+    if mk8dx and author == "furaga" and question == "nf":
+        # ゴールの感想を述べさせる
+        _, answer = OpenAILLM.ask_mk8dx(
+            0,
+            0,
+            None,
+            None,
+            latest_place[1],
+            chat_history=[],
+            race_mode=False,
+        )
+        request_tts(BOT_NAME, answer)
+        reset_mk8dx()
+        return True
+    elif mk8dx and author == "furaga" and question == "こんばんは":
+        # 開始の挨拶
+        request_tts(BOT_NAME, "ずんだもんなのだ。今日もマリオカートをやっていくのだ")
+        request_tts(BOT_NAME, "まだまだ上手ではないけれど、一生懸命プレイするのだ。みんなも楽しんでほしいのだ")
+        request_tts(BOT_NAME, "コメントもどんどんしてほしいのだ。よろしくなのだ")
+        request_tts(BOT_NAME, "さっそく始めるのだ")
+        return True
+    elif mk8dx and author == "furaga" and question == "そろそろ":
+        # 終わりの挨拶
+        request_tts(BOT_NAME, "今日はこのへんで終わりにするのだ。楽しかったのだ")
+        request_tts(BOT_NAME, "見てくれたみんなもありがとうなのだ")
+        request_tts(BOT_NAME, "よかったらチャンネル登録と高評価お願いしますなのだ")
+        request_tts(BOT_NAME, "次回の配信もぜひ見に来てほしいのだ")
+        request_tts(BOT_NAME, "じゃあ、お疲れ様でした、なのだ！")
+        return True
+
+    return False
+
+
+#
+# TTS (Text To Speech)
+#
+@fire_and_forget
+def run_tts_loop():
+    global is_finish
+    while True:
+        try:
+            if len(tts_queue_) > 0:
+                text = tts_queue_.pop(0)
+                since = time.time()
+                wav = tts(text)
+                request_speak(text, wav)
+                print(
+                    f"[run_tts_thread] tts {text} | elapsed {time.time() - since:.2f} sec"
+                )
+            else:
+                time.sleep(0.5)
+            if is_finish:
+                break
+        except Exception as e:
+            import traceback
+
+            print("error in run_tts_thread:", e)
+            print(traceback.format_exc())
+            is_finish = True
+            break
 
 
 def tts(text):
@@ -118,6 +202,14 @@ def tts(text):
     return res2.content
 
 
+def request_tts(speaker_name, text):
+    chat_history_.append({"role": "system", "content": f"{speaker_name}: {text}"})
+    tts_queue_.append(text)
+
+
+#
+# TTSの結果を再生する
+#
 @fire_and_forget
 def run_speak_loop():
     global is_finish
@@ -142,6 +234,71 @@ def run_speak_loop():
             print(traceback.format_exc())
             is_finish = True
             break
+
+
+def speak(text, wav):
+    # OBSの字幕変更
+    OBS.set_text("zundamon_zimaku", text)
+
+    # 音声再生
+    play_obj = simpleaudio.play_buffer(wav, 1, 2, 24000)
+    play_obj.wait_done()
+
+
+def request_speak(text, wav):
+    speak_queue.append((text, wav))
+
+
+#
+# マリカの画面を解析して実況させる
+#
+@fire_and_forget
+def run_mk8dx_loop():
+    global is_finish, latest_place
+    with open("mk8dx_chat_history.txt", "a", encoding="utf8") as f:
+        while True:
+            try:
+                if is_finish:
+                    break
+
+                since = time.time()
+                # print("[run_mk8dx] start game capture", flush=True)
+                img = OBS.capture_game_screen()
+                # print("[run_mk8dx] game capture", flush=True)
+                ret, result = parse_mk8dx_screen(img)
+                # print("[run_mk8dx] parse_mk8dx_screen", flush=True)
+                if not ret:
+                    continue
+
+                n_coin, n_lap, omote, ura, place = result
+                set_obs_current_mk8dx_info(n_coin, n_lap, omote, ura, place)
+                # print("[run_mk8dx] set_obs_current_mk8dx_info", flush=True)
+
+                # 喋ることがないときにマリカの話をさせる
+                if len(tts_queue_) >= 1 or len(speak_queue) >= 1:
+                    continue
+
+                # あまり昔すぎる情報を喋らせないように、ttsが終わってから返答を作り始める
+                if during_tts_:
+                    continue
+
+                latest_place = place
+                answer = think_mk8dx(n_coin, n_lap, omote, ura, place)
+                # print("[run_mk8dx] think_mk8dx")
+                if len(answer) >= 1:
+                    f.write(f"{place},{omote},{ura},{n_lap},{n_coin},{answer}\n")
+                    f.flush()
+                    request_tts(BOT_NAME, answer)
+                print(
+                    "[run_mk8dx] think:",
+                    answer,
+                    f"| elapsed {time.time() - since:.2f} sec",
+                    flush=True,
+                )
+            except Exception as e:
+                print(str(e), "\n", traceback.format_exc(), flush=True)
+                is_finish = True
+                break
 
 
 def parse_mk8dx_screen(img):
@@ -196,23 +353,6 @@ def parse_mk8dx_screen(img):
     return True, (n_coin, n_lap, omote, ura, place)
 
 
-def think_mk8dx(n_coin, n_lap, omote, ura, place):
-    # OpenAI APIで回答生成
-    ret, answer = OpenAILLM.ask_mk8dx(
-        n_coin,
-        n_lap,
-        omote[1],
-        ura[1],
-        place[1],
-        chat_history=[],
-        race_mode=True,
-    )
-    answer = answer.replace("「", "").replace("」", "")
-    if not ret:
-        return ""
-    return answer
-
-
 def set_obs_current_mk8dx_info(n_coin, n_lap, omote, ura, place):
     text = f"順位: {place[1]}\n"
     text += f"アイテム: {omote[1]}, {ura[1]}\n"
@@ -221,97 +361,18 @@ def set_obs_current_mk8dx_info(n_coin, n_lap, omote, ura, place):
     OBS.set_text("current_mk8dx_info", text)
 
 
-@fire_and_forget
-def run_mk8dx_loop():
-    global is_finish, latest_place
-    with open("mk8dx_chat_history.txt", "a", encoding="utf8") as f:
-        while True:
-            try:
-                if is_finish:
-                    break
+def init(args):
+    OpenAILLM.init("data/config/mk8dx/prompt.json")
+    OBS.init(args.obs_pass)
 
-                since = time.time()
-                # print("[run_mk8dx] start game capture", flush=True)
-                img = OBS.capture_game_screen()
-                # print("[run_mk8dx] game capture", flush=True)
-                ret, result = parse_mk8dx_screen(img)
-                # print("[run_mk8dx] parse_mk8dx_screen", flush=True)
-                if not ret:
-                    continue
+    mk8dx_ = args.mk8dx
+    if mk8dx_:
+        MK8DX.init(Path("data/mk8dx_images"))
 
-                n_coin, n_lap, omote, ura, place = result
-                set_obs_current_mk8dx_info(n_coin, n_lap, omote, ura, place)
-                # print("[run_mk8dx] set_obs_current_mk8dx_info", flush=True)
-
-                # 喋ることがないときにマリカの話をさせる
-                if len(tts_queue_) >= 1 or len(speak_queue) >= 1:
-                    continue
-
-                # あまり昔すぎる情報を喋らせないように、ttsが終わってから返答を作り始める
-                if during_tts_:
-                    continue
-
-                latest_place = place
-                answer = think_mk8dx(n_coin, n_lap, omote, ura, place)
-                # print("[run_mk8dx] think_mk8dx")
-                if len(answer) >= 1:
-                    f.write(f"{place},{omote},{ura},{n_lap},{n_coin},{answer}\n")
-                    f.flush()
-                    request_tts(BOT_NAME, answer)
-                print(
-                    "[run_mk8dx] think:",
-                    answer,
-                    f"| elapsed {time.time() - since:.2f} sec",
-                    flush=True,
-                )
-            except Exception as e:
-                print(str(e), "\n", traceback.format_exc(), flush=True)
-                is_finish = True
-                break
-
-
-def request_speak(text, wav):
-    speak_queue.append((text, wav))
-
-
-@fire_and_forget
-def run_tts_loop():
-    global is_finish
-    while True:
-        try:
-            if len(tts_queue_) > 0:
-                text = tts_queue_.pop(0)
-                since = time.time()
-                wav = tts(text)
-                request_speak(text, wav)
-                print(
-                    f"[run_tts_thread] tts {text} | elapsed {time.time() - since:.2f} sec"
-                )
-            else:
-                time.sleep(0.5)
-            if is_finish:
-                break
-        except Exception as e:
-            import traceback
-
-            print("error in run_tts_thread:", e)
-            print(traceback.format_exc())
-            is_finish = True
-            break
-
-
-def request_tts(speaker_name, text):
-    chat_history_.append({"role": "system", "content": f"{speaker_name}: {text}"})
-    tts_queue_.append(text)
-
-
-def speak(text, wav):
-    # OBSの字幕変更
-    OBS.set_text("zundamon_zimaku", text)
-
-    # 音声再生
-    play_obj = simpleaudio.play_buffer(wav, 1, 2, 24000)
-    play_obj.wait_done()
+    # 独り言を読み込む
+    global all_monologues
+    with open("data/soliloquys.txt", encoding="utf8") as f:
+        all_monologues = [line.strip() for line in f if len(line.strip()) > 1]
 
 
 def reset_mk8dx():
@@ -321,57 +382,9 @@ def reset_mk8dx():
     set_obs_current_mk8dx_info(0, 0, [1, "--"], [1, "--"], [1, "--"])
 
 
-# ランダムで流す独白
-def think_monologues():
-    return random.choice(all_monologues)
-
-
-# 決め打ちのセリフ・処理
-def play_scenario(author, question, mk8dx: bool):
-    if mk8dx and author == "furaga" and question == "nf":
-        # ゴールの感想を述べさせる
-        _, answer = OpenAILLM.ask_mk8dx(
-            0,
-            0,
-            None,
-            None,
-            latest_place[1],
-            chat_history=[],
-            race_mode=False,
-        )
-        request_tts(BOT_NAME, answer)
-        reset_mk8dx()
-        return True
-    elif mk8dx and author == "furaga" and question == "こんばんは":
-        # 開始の挨拶
-        request_tts(BOT_NAME, "ずんだもんなのだ。今日もマリオカートをやっていくのだ")
-        request_tts(BOT_NAME, "まだまだ上手ではないけれど、一生懸命プレイするのだ。みんなも楽しんでほしいのだ")
-        request_tts(BOT_NAME, "コメントもどんどんしてほしいのだ。よろしくなのだ")
-        request_tts(BOT_NAME, "さっそく始めるのだ")
-        return True
-    elif mk8dx and author == "furaga" and question == "そろそろ":
-        # 終わりの挨拶
-        request_tts(BOT_NAME, "今日はこのへんで終わりにするのだ。楽しかったのだ")
-        request_tts(BOT_NAME, "見てくれたみんなもありがとうなのだ")
-        request_tts(BOT_NAME, "よかったらチャンネル登録と高評価お願いしますなのだ")
-        request_tts(BOT_NAME, "次回の配信もぜひ見に来てほしいのだ")
-        request_tts(BOT_NAME, "じゃあ、お疲れ様でした、なのだ！")
-        return True
-
-    return False
-
-
-async def main(args) -> None:
+@fire_and_forget
+def run_chatbot_loop():
     global is_finish
-
-    # 初期化
-    init()
-
-    # 並行処理を起動
-    run_tts_loop()
-    run_speak_loop()
-    if args.mk8dx:
-        run_mk8dx_loop()
 
     # Youtubeのチャットからコメントを拾って回答する
     prev_listen_time = time.time()
@@ -381,7 +394,7 @@ async def main(args) -> None:
             ret, author, question = youtube_listen_chat()
 
             # 一定時間なにもコメントがなかったら独白
-            if not ret and not args.mk8dx and time.time() - prev_listen_time > 45:
+            if not ret and not mk8dx_ and time.time() - prev_listen_time > 45:
                 monologue = think_monologues()
                 request_tts(BOT_NAME, monologue)
                 prev_listen_time = time.time()
@@ -393,7 +406,7 @@ async def main(args) -> None:
                 continue
 
             # 特定ワードで決め打ちの処理を行う
-            talked_any = play_scenario(author, question, args.mk8dx)
+            talked_any = play_scenario(author, question, mk8dx_)
             if talked_any:
                 prev_listen_time = time.time()
                 continue
@@ -412,6 +425,24 @@ async def main(args) -> None:
             print(str(e), "\n", traceback.format_exc(), flush=True)
             is_finish = True
             break
+
+
+async def main(args) -> None:
+    # 初期化
+    init(args)
+
+    # 並行処理を起動
+    run_chatbot_loop()
+    run_tts_loop()
+    run_speak_loop()
+    if args.mk8dx:
+        run_mk8dx_loop()
+
+    # メインループは何もしない（ヘルスチェックくらいする？)
+    while True:
+        if is_finish:
+            break
+        await asyncio.sleep(1)
 
 
 if __name__ == "__main__":
