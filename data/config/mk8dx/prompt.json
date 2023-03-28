@@ -6,7 +6,7 @@
                 "content": "下記はここまでの会話です。"
             },
             {
-                "role": "chat_history"
+                "role": "chat_history@"
             },
             {
                 "role": "personality@./personality.txt"
@@ -27,7 +27,7 @@
                 "content": "下記はここまでの会話です。"
             },
             {
-                "role": "chat_history"
+                "role": "chat_history@"
             },
             {
                 "role": "personality@./personality.txt"
@@ -37,7 +37,7 @@
                 "content": "直前ののレース状況は以下の通りです"
             },
             {
-                "role": "previous_status"
+                "role": "previous_status@"
             },
             {
                 "role": "user",
@@ -59,7 +59,7 @@
                 "content": "下記はここまでの会話です。"
             },
             {
-                "role": "chat_history"
+                "role": "chat_history@"
             },
             {
                 "role": "personality@./personality.txt"
