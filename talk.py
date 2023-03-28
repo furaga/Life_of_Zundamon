@@ -15,20 +15,8 @@ from utils import OpenAILLM
 from utils import OBS
 
 
-# コマンド引数
-def parse_args():
-    parser = argparse.ArgumentParser(description="TALK")
-    parser.add_argument(
-        "--obs_pass", type=str, required=True, help="OBS Websocketのパスワード"
-    )
-    parser.add_argument("--chat_video_id", type=str, required=True, help="YouTubeの動画ID")
-    parser.add_argument("--mk8dx", action="store_true")
-    args = parser.parse_args()
-    return args
-
-
 BOT_NAME = "ずんだもん"
-chat_history_ = []
+talk_history_ = []
 mk8dx_ = False
 
 # pytchat
@@ -50,6 +38,18 @@ mk8dx_history = []
 latest_place = [0, "1"]
 
 during_tts_ = False
+
+
+# コマンド引数
+def parse_args():
+    parser = argparse.ArgumentParser(description="TALK")
+    parser.add_argument(
+        "--obs_pass", type=str, required=True, help="OBS Websocketのパスワード"
+    )
+    parser.add_argument("--chat_video_id", type=str, required=True, help="YouTubeの動画ID")
+    parser.add_argument("--mk8dx", action="store_true")
+    args = parser.parse_args()
+    return args
 
 
 #
@@ -87,7 +87,7 @@ def think(author, question):
         )
 
     # OpenAI APIで回答生成
-    ret, response = OpenAILLM.ask(question, chat_history_)
+    ret, response = OpenAILLM.ask(question, talk_history_)
     print("[think]", ret, response)
     if not ret:
         return random.choice(
@@ -203,12 +203,16 @@ def tts(text):
 
 
 def request_tts(speaker_name, text):
-    chat_history_.append({"role": "system", "content": f"{speaker_name}: {text}"})
+    global talk_history_
+    talk_history_.append({"role": "system", "content": f"{speaker_name}: {text}"})
+    if len(talk_history_) > 5:
+        talk_history_ = talk_history_[-5:]
+
     tts_queue_.append(text)
 
 
 #
-# TTSの結果を再生する
+# 音声再生
 #
 @fire_and_forget
 def run_speak_loop():
@@ -382,11 +386,13 @@ def reset_mk8dx():
     set_obs_current_mk8dx_info(0, 0, [1, "--"], [1, "--"], [1, "--"])
 
 
+#
+# Youtubeのチャットからコメントを拾って回答するボットを動かす
+#
 @fire_and_forget
 def run_chatbot_loop():
     global is_finish
 
-    # Youtubeのチャットからコメントを拾って回答する
     prev_listen_time = time.time()
     while True:
         try:
