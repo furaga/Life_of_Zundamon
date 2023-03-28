@@ -31,23 +31,23 @@ def imwrite_safe(filename, img, params=None):
         return False
 
 
-for img_path in list(Path("data/mk8dx_images/items").glob("*.png")):
-    input = imread_safe(str(img_path))
-    print(img_path)
-    print(input.shape)
-    output = remove(input)
-    out_path = "data/mk8dx_images/items_rembg/" + img_path.name
-    print("Output:", out_path)
-    imwrite_safe(str(out_path), output)
-
-
-# for img_path in list(Path("data/mk8dx_images/place").glob("*.png")):
+# for img_path in list(Path("data/mk8dx_images/items").glob("*.png")):
 #     input = imread_safe(str(img_path))
 #     print(img_path)
 #     print(input.shape)
 #     output = remove(input)
-#     out_path = "data/mk8dx_images/place_rembg/" + img_path.name
+#     out_path = "data/mk8dx_images/items_rembg/" + img_path.name
 #     print("Output:", out_path)
 #     imwrite_safe(str(out_path), output)
-# #    cv2.imshow("img", output)
-# #    cv2.waitKey(0)
+
+
+for img_path in list(Path("data/mk8dx_images/place").glob("*.png")):
+    input = imread_safe(str(img_path))
+    print(img_path)
+    print(input.shape)
+    output = remove(input)
+    out_path = "data/mk8dx_images/place_rembg/" + img_path.name
+    print("Output:", out_path)
+    imwrite_safe(str(out_path), output)
+#    cv2.imshow("img", output)
+#    cv2.waitKey(0)

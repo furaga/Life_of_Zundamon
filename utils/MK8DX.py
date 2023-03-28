@@ -9,8 +9,7 @@ import numpy as np
 import clip
 import torch
 
-#from . 
-import digit_ocr
+from . import digit_ocr
 
 
 item_dict_ = {}
