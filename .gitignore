@@ -2,6 +2,7 @@ wheel/
 voicevox_core/
 record/
 donwload.exe
+__tmp__.jpg
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
