@@ -9,7 +9,8 @@ import numpy as np
 import clip
 import torch
 
-from . import digit_ocr
+#from . 
+import digit_ocr
 
 
 item_dict_ = {}
@@ -86,7 +87,7 @@ def init(root_dir: Path):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model, clip_preprocess = clip.load("ViT-B/32", device)
     load_item_images(root_dir / "items")
-    load_place_images(root_dir / "place")
+    load_place_images(root_dir / "place_rembg")
 
 
 def match(img_feat, ref_feat):
@@ -191,22 +192,27 @@ if __name__ == "__main__":
     def main() -> None:
         init(Path("../data/mk8dx_images"))
 
-        for img_path in Path("../record").glob("*.png"):
+        img_list = list(Path("../record").glob("*.png"))
+        for i, img_path in enumerate(img_list):
+            if i < 400:
+                continue
             img = cv2.imread(str(img_path))
 
-            # since = time.time()
-            # ret = detect_items(img)
-            # print(f"[detect_items] Elapsed {time.time() - since:.2f} sec")
+            since = time.time()
+            ret = detect_items(img)
+            print(ret)
+            print(f"({i})[detect_items] Elapsed {time.time() - since:.2f} sec")
 
-            # since = time.time()
-            # ret = detect_place(img)
-            # print(f"[detect_place] Elapsed {time.time() - since:.2f} sec")
+            since = time.time()
+            ret = detect_place(img)
+            print(ret)
+            print(f"({i})[detect_place] Elapsed {time.time() - since:.2f} sec")
 
             since = time.time()
             ret = detect_coin(img)
             since = time.time()
             ret = detect_lap(img)
-            print(f"[detect coin/lap] Elapsed {time.time() - since:.2f} sec")
+            print(f"({i})[detect coin/lap] Elapsed {time.time() - since:.2f} sec")
 
             # 大きくて画面に入らないので小さく
             img_resize = cv2.resize(img, None, fx=0.7, fy=0.7)
