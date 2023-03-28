@@ -76,7 +76,7 @@ def init():
     global soliloquys
     with open("data/soliloquys.txt", encoding="utf8") as f:
         soliloquys = [line.strip() for line in f if len(line.strip()) > 1]
-    OpenAILLM.init_openai()
+    OpenAILLM.init_openai("data/config/mk8dx/prompt.json")
     ws.connect()
 
 
