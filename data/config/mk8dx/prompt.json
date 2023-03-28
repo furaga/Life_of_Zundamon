@@ -1,0 +1,79 @@
+[
+    {
+        "default": [
+            {
+                "role": "system",
+                "content": "下記はここまでの会話です。"
+            },
+            {
+                "role": "chat_history"
+            },
+            {
+                "role": "personality@./personality.txt"
+            },
+            {
+                "role": "system",
+                "content": "下記は直前の会話です。"
+            },
+            {
+                "role": "@prompt"
+            }
+        ]
+    },
+    {
+        "mk8dx_race": [
+            {
+                "role": "system",
+                "content": "下記はここまでの会話です。"
+            },
+            {
+                "role": "chat_history"
+            },
+            {
+                "role": "personality@./personality.txt"
+            },
+            {
+                "role": "user",
+                "content": "直前ののレース状況は以下の通りです"
+            },
+            {
+                "role": "previous_status"
+            },
+            {
+                "role": "user",
+                "content": "現在のレース状況は以下の通りです"
+            },
+            {
+                "role": "status@./status.txt"
+            },
+            {
+                "role": "user",
+                "content": "この状況を踏まえて、可愛らしい実況コメントを30文字以内で出力してください。"
+            }
+        ]
+    },
+    {
+        "mk8dx_result": [
+            {
+                "role": "system",
+                "content": "下記はここまでの会話です。"
+            },
+            {
+                "role": "chat_history"
+            },
+            {
+                "role": "personality@./personality.txt"
+            },
+            {
+                "role": "result@./result.txt"
+            },
+            {
+                "role": "user",
+                "content": "以下のフォーマットで感想をを30文字以内で出力してください。"
+            },
+            {
+                "role": "impression@./impression.txt"
+            }
+        ]
+    }
+]
