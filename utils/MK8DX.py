@@ -150,8 +150,9 @@ def detect_place(img):
     place_img_feat /= np.linalg.norm(place_img_feat)
 
     ls = []
-    for item_name, (ref_mask, ref_feat) in place_dict_.items():
-        ls.append([match(place_img_feat, ref_feat), item_name])
+    for place_name, (ref_mask, ref_feat) in place_dict_.items():
+        place_name = place_name.split("_")[0]
+        ls.append([match(place_img_feat, ref_feat), place_name])
 
     ls = sorted(ls)
     # print(ls[-2:])
