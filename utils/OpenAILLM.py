@@ -58,15 +58,15 @@ def chat_completion(prompt: List, timeout: float) -> Tuple[bool, str]:
         except openai.error.RateLimitError as e:
             print("Prompt:", prompt, flush=True)
             print(str(e), "\n", traceback.format_exc(), flush=True)
-            time.sleep(0.1)
+            time.sleep(1)
         except openai.error.APIError as e:
             print("Prompt:", prompt, flush=True)
             print(str(e), "\n", traceback.format_exc(), flush=True)
-            time.sleep(0.1)
+            time.sleep(1)
         except Exception as e:
             print("Prompt:", prompt, flush=True)
             print(str(e), "\n", traceback.format_exc(), flush=True)
-            time.sleep(0.1)
+            time.sleep(1)
     return False, ""
 
 

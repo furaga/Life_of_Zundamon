@@ -373,16 +373,19 @@ async def main(args) -> None:
     if args.mk8dx:
         run_mk8dx_loop()
 
+    # Youtubeのチャットからコメントを拾って回答する
     prev_listen_time = time.time()
     while True:
         try:
             # Youtubeの最新のコメントを拾う
             ret, author, question = youtube_listen_chat()
 
-            # 一定時間なにもコメントがなかったら
+            # 一定時間なにもコメントがなかったら独白
             if not ret and not args.mk8dx and time.time() - prev_listen_time > 45:
                 monologue = think_monologues()
                 request_tts(BOT_NAME, monologue)
+                prev_listen_time = time.time()
+                continue
 
             # コメントがなかったら、もう一度ループ
             if not ret:
@@ -399,7 +402,7 @@ async def main(args) -> None:
             request_tts("User", "「" + question + "」")
 
             # 回答を考える
-            answer = think(author, question, chat_history_)
+            answer = think(author, question)
 
             # 回答を読み上げる
             request_tts(BOT_NAME, answer)
