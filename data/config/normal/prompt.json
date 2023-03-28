@@ -1,0 +1,23 @@
+[
+    {
+        "default": [
+            {
+                "role": "system",
+                "content": "下記はここまでの会話です。"
+            },
+            {
+                "role": "chat_history"
+            },
+            {
+                "role": "personality@./personality.txt"
+            },
+            {
+                "role": "system",
+                "content": "下記は直前の会話です。"
+            },
+            {
+                "role": "@prompt"
+            }
+        ]
+    }
+]
