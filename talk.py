@@ -1,15 +1,13 @@
 import asyncio
 import requests
 import pytchat
-import obswebsocket
 import time
 import json
 import simpleaudio
 import random
 import argparse
-import os
 from pathlib import Path
-import cv2
+import traceback
 
 from utils.asyncio_util import fire_and_forget
 from utils import MK8DX
@@ -29,6 +27,9 @@ def parse_args():
     return args
 
 
+BOT_NAME = "ずんだもん"
+chat_history_ = []
+
 # pytchat
 chat = pytchat.create(video_id=args.chat_video_id)
 
@@ -40,7 +41,7 @@ all_monologues = []
 
 
 speak_queue = []
-tts_queue = []
+tts_queue_ = []
 is_finish = False
 
 mk8dx_history = []
@@ -75,7 +76,7 @@ def youtube_listen_chat():
     return True, chats[-1].author.name, chats[-1].message
 
 
-def think(author, prompt, chat_history):
+def think(author, prompt):
     # ハードコード
     if "初見" in prompt:
         return random.choice(
@@ -88,7 +89,7 @@ def think(author, prompt, chat_history):
         )
 
     # OpenAI APIで回答生成
-    ret, response = OpenAILLM.ask(prompt, chat_history)
+    ret, response = OpenAILLM.ask(prompt, chat_history_)
     print("[think]", ret, response)
     if not ret:
         return random.choice(
@@ -243,7 +244,7 @@ def run_mk8dx_loop():
                 # print("[run_mk8dx] set_obs_current_mk8dx_info", flush=True)
 
                 # 喋ることがないときにマリカの話をさせる
-                if len(tts_queue) >= 1 or len(speak_queue) >= 1:
+                if len(tts_queue_) >= 1 or len(speak_queue) >= 1:
                     continue
 
                 # あまり昔すぎる情報を喋らせないように、ttsが終わってから返答を作り始める
@@ -256,7 +257,7 @@ def run_mk8dx_loop():
                 if len(answer) >= 1:
                     f.write(f"{place},{omote},{ura},{n_lap},{n_coin},{answer}\n")
                     f.flush()
-                    request_tts(answer)
+                    request_tts(BOT_NAME, answer)
                 print(
                     "[run_mk8dx] think:",
                     answer,
@@ -264,10 +265,7 @@ def run_mk8dx_loop():
                     flush=True,
                 )
             except Exception as e:
-                import traceback
-
-                print("error in run_mk8dx:", e)
-                print(traceback.format_exc())
+                print(str(e), "\n", traceback.format_exc(), flush=True)
                 is_finish = True
                 break
 
@@ -281,8 +279,8 @@ def run_tts_loop():
     global is_finish
     while True:
         try:
-            if len(tts_queue) > 0:
-                text = tts_queue.pop(0)
+            if len(tts_queue_) > 0:
+                text = tts_queue_.pop(0)
                 since = time.time()
                 wav = tts(text)
                 request_speak(text, wav)
@@ -302,8 +300,9 @@ def run_tts_loop():
             break
 
 
-def request_tts(text):
-    tts_queue.append(text)
+def request_tts(speaker_name, text):
+    chat_history_.append({"role": "system", "content": f"{speaker_name}: {text}"})
+    tts_queue_.append(text)
 
 
 def speak(text, wav):
@@ -340,24 +339,23 @@ def play_scenario(author, question, mk8dx: bool):
             chat_history=[],
             race_mode=False,
         )
-        request_tts(answer)
-        print("[main] think:", answer, f"| elapsed {time.time() - since:.2f} sec")
+        request_tts(BOT_NAME, answer)
         reset_mk8dx()
         return True
     elif mk8dx and author == "furaga" and question == "こんばんは":
         # 開始の挨拶
-        request_tts("ずんだもんなのだ。今日もマリオカートをやっていくのだ")
-        request_tts("まだまだ上手ではないけれど、一生懸命プレイするのだ。みんなも楽しんでほしいのだ")
-        request_tts("コメントもどんどんしてほしいのだ。よろしくなのだ")
-        request_tts("さっそく始めるのだ")
+        request_tts(BOT_NAME, "ずんだもんなのだ。今日もマリオカートをやっていくのだ")
+        request_tts(BOT_NAME, "まだまだ上手ではないけれど、一生懸命プレイするのだ。みんなも楽しんでほしいのだ")
+        request_tts(BOT_NAME, "コメントもどんどんしてほしいのだ。よろしくなのだ")
+        request_tts(BOT_NAME, "さっそく始めるのだ")
         return True
     elif mk8dx and author == "furaga" and question == "そろそろ":
         # 終わりの挨拶
-        request_tts("今日はこのへんで終わりにするのだ。楽しかったのだ")
-        request_tts("見てくれたみんなもありがとうなのだ")
-        request_tts("よかったらチャンネル登録と高評価お願いしますなのだ")
-        request_tts("次回の配信もぜひ見に来てほしいのだ")
-        request_tts("じゃあ、お疲れ様でした、なのだ！")
+        request_tts(BOT_NAME, "今日はこのへんで終わりにするのだ。楽しかったのだ")
+        request_tts(BOT_NAME, "見てくれたみんなもありがとうなのだ")
+        request_tts(BOT_NAME, "よかったらチャンネル登録と高評価お願いしますなのだ")
+        request_tts(BOT_NAME, "次回の配信もぜひ見に来てほしいのだ")
+        request_tts(BOT_NAME, "じゃあ、お疲れ様でした、なのだ！")
         return True
 
     return False
@@ -375,49 +373,40 @@ async def main(args) -> None:
     if args.mk8dx:
         run_mk8dx_loop()
 
-    prev_talked_time = time.time()
-    chat_history = []
+    prev_listen_time = time.time()
     while True:
         try:
-            since = time.time()
+            # Youtubeの最新のコメントを拾う
             ret, author, question = youtube_listen_chat()
 
-            # 45秒間なにも喋らなかったら、自分で話す
-            if not ret and not args.mk8dx and time.time() - prev_talked_time > 45:
+            # 一定時間なにもコメントがなかったら
+            if not ret and not args.mk8dx and time.time() - prev_listen_time > 45:
                 monologue = think_monologues()
-                print("[main] soliloquy:", monologue)
-                request_tts(monologue)
+                request_tts(BOT_NAME, monologue)
 
+            # コメントがなかったら、もう一度ループ
             if not ret:
-                prev_talked_time = time.time()
+                prev_listen_time = time.time()
                 continue
 
             # 特定ワードで決め打ちの処理を行う
             talked_any = play_scenario(author, question, args.mk8dx)
             if talked_any:
-                prev_talked_time = time.time()
+                prev_listen_time = time.time()
                 continue
 
             # 質問文を読み上げる
-            request_tts("「" + question + "」")
+            request_tts("User", "「" + question + "」")
 
             # 回答を考える
-            answer = think(author, question, chat_history)
+            answer = think(author, question, chat_history_)
 
             # 回答を読み上げる
-            request_tts(answer)
+            request_tts(BOT_NAME, answer)
 
-            chat_history.append({"role": "system", "content": "User: " + question})
-            chat_history.append({"role": "system", "content": "ずんだもん: " + answer})
-            if len(chat_history) > 5:
-                chat_history = chat_history[-5:]
-
-            prev_talked_time = time.time()
+            prev_listen_time = time.time()
         except Exception as e:
-            import traceback
-
-            print("error in run_tts_thread:", e)
-            print(traceback.format_exc())
+            print(str(e), "\n", traceback.format_exc(), flush=True)
             is_finish = True
             break
 
