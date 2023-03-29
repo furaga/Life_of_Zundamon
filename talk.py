@@ -35,7 +35,10 @@ mk8dx_speak_queue_ = []
 tts_queue_ = []
 is_finish_ = False
 
-mk8dx_history_ = []
+mk8dx_raw_status_history_ = []
+mk8dx_status_history_ = []
+mk8dx_status_updated_ = False
+
 
 latest_place_ = [0, "1"]
 
@@ -80,8 +83,11 @@ def think(author, question):
             ]
         )
 
+    with get_lock("talk_history"):
+        history = talk_history_.copy()
+
     # OpenAI APIで回答生成
-    ret, answer = OpenAILLM.ask(question, talk_history_)
+    ret, answer = OpenAILLM.ask(question, history)
     print("[think]", ret, answer)
     if not ret:
         return random.choice(
@@ -100,11 +106,13 @@ def think_mk8dx(n_coin, n_lap, lap_time, omote, ura, place, delta_coin):
     ret, answer = OpenAILLM.ask_mk8dx(
         n_coin,
         n_lap,
+        lap_time,
         omote[1],
         ura[1],
         place[1],
+        delta_coin,
         chat_history=[],
-        race_mode=True,
+        is_race_mode=True,
     )
     answer = answer.replace("「", "").replace("」", "")
     if not ret:
@@ -194,9 +202,10 @@ def tts(text):
 
 def request_tts(speaker_name, text):
     global talk_history_
-    talk_history_.append({"role": "system", "content": f"{speaker_name}: {text}"})
-    if len(talk_history_) > 5:
-        talk_history_ = talk_history_[-5:]
+    with get_lock("talk_history"):
+        talk_history_.append({"role": "system", "content": f"{speaker_name}: {text}"})
+        if len(talk_history_) > 5:
+            talk_history_ = talk_history_[-5:]
 
     with get_lock("tts_queue"):
         tts_queue_.append(text)
@@ -271,9 +280,6 @@ def request_mk8dx_speak(text, wav):
 #
 # マリカの画面を解析して実況させる
 #
-
-mk8dx_status_history_ = []
-mk8dx_status_updated_ = False
 
 
 @fire_and_forget
@@ -357,6 +363,14 @@ def run_mk8dx_think_tts_thread():
                     f.flush()
 
                     # tts（時間に余裕があるので同期）
+                    global talk_history_
+                    with get_lock("talk_history"):
+                        talk_history_.append(
+                            {"role": "system", "content": f"{BOT_NAME}: {answer}"}
+                        )
+                        if len(talk_history_) > 5:
+                            talk_history_ = talk_history_[-5:]
+
                     wav = tts(BOT_NAME, answer)
 
                     # 再生（非同期）
@@ -373,7 +387,7 @@ def run_mk8dx_think_tts_thread():
 
 
 def parse_mk8dx_screen(img):
-    global mk8dx_history_
+    global mk8dx_raw_status_history_
 
     # 画像解析
     ret_coin, n_coin = MK8DX.detect_coin(img)
@@ -414,20 +428,22 @@ def parse_mk8dx_screen(img):
 
         return True
 
-    mk8dx_history_.append([n_coin, n_lap, omote, ura, place])
-    if len(mk8dx_history_) >= 3:
-        mk8dx_history_ = mk8dx_history_[-3:]
+    mk8dx_raw_status_history_.append([n_coin, n_lap, omote, ura, place])
+    if len(mk8dx_raw_status_history_) >= 3:
+        mk8dx_raw_status_history_ = mk8dx_raw_status_history_[-3:]
 
-    if len(mk8dx_history_) < 3:
+    if len(mk8dx_raw_status_history_) < 3:
         return False, None
 
     # 3フレーム同じ結果だったら採用してOBS側を更新
     # TODO: 全部の要素の一致を見なくても良いのでは？個々の要素ごとに一致を見ればよいのでは
     for i in range(2):
-        if same(mk8dx_history_[-1 - i :], mk8dx_history_[-2 - i :]):
+        if same(
+            mk8dx_raw_status_history_[-1 - i :], mk8dx_raw_status_history_[-2 - i :]
+        ):
             return False, None
 
-    return True, mk8dx_history_[-1]
+    return True, mk8dx_raw_status_history_[-1]
 
 
 def send_mk8dx_status_to_OBS(n_coin, n_lap, lap_time, omote, ura, place):
@@ -530,8 +546,11 @@ def init(args):
 
 
 def reset_mk8dx():
-    global mk8dx_history_
-    mk8dx_history_ = []
+    global mk8dx_raw_status_history_, mk8dx_status_history_, mk8dx_status_updated_
+    with get_lock("mk8dx_history"):
+        mk8dx_raw_status_history_ = []
+        mk8dx_status_history_ = []
+        mk8dx_status_updated_ = False
     OBS.set_text("zundamon_zimaku", "")
     send_mk8dx_status_to_OBS(0, 0, [1, "--"], 0, [1, "--"], [1, "--"])
 

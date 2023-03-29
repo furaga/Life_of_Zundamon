@@ -111,7 +111,14 @@ def ask(text: str, chat_history: List, timeout: float = 8) -> Tuple[bool, str]:
 
 
 def make_prompt_mk8dx_race(
-    n_coin: int, n_lap: int, omote: str, ura: str, place: str, chat_history: List
+    n_coin: int,
+    n_lap: int,
+    lap_time: float,
+    omote: str,
+    ura: str,
+    place: str,
+    delta_coin: int,
+    chat_history: List,
 ):
     global prev_mk8dx_status_
 
@@ -125,7 +132,11 @@ def make_prompt_mk8dx_race(
         elif msg["role"] == "previous_status@":
             prompt.append({"role": "user", "content": prev_mk8dx_status_})
         elif msg["role"].startswith("status@"):
-            status = load_format(msg).format(n_coin, n_lap, omote, ura, place)
+            lap_position = "前半" if lap_time > 20 else "後半"
+            additional_info = "・あなたはたった今、被弾してコインを失いました" if delta_coin < 0 else ""
+            status = load_format(msg).format(
+                place, omote, ura, n_coin, n_lap, lap_position, additional_info
+            )
             prompt.append({"role": "user", "content": status})
             prev_mk8dx_status_ = status
         else:
@@ -152,10 +163,23 @@ def make_prompt_mk8dx_result(place, chat_history):
     return prompt
 
 
-def ask_mk8dx(n_coin, n_lap, omote, ura, place, chat_history, is_race_mode, timeout=8):
+def ask_mk8dx(
+    n_coin,
+    n_lap,
+    lap_time,
+    omote,
+    ura,
+    place,
+    delta_coin,
+    chat_history,
+    is_race_mode,
+    timeout=8,
+):
     global prev_mk8dx_status_
     if is_race_mode:
-        prompt = make_prompt_mk8dx_race(n_coin, n_lap, omote, ura, place, chat_history)
+        prompt = make_prompt_mk8dx_race(
+            n_coin, n_lap, lap_time, omote, ura, place, delta_coin, chat_history
+        )
     else:
         prompt = make_prompt_mk8dx_result(place, chat_history)
 
