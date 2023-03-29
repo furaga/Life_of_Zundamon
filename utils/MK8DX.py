@@ -58,11 +58,10 @@ def load_item_images(item_dir: Path):
     for img_path in all_img_paths:
         img = imread_safe(str(img_path), cv2.IMREAD_UNCHANGED)
         img = cv2.resize(img, (ITEM_IMAGE_SIZE, ITEM_IMAGE_SIZE))
-        mask = img[:, :, 3]
         rgb = img[:, :, :3]  # cv2.bitwise_and(img[:, :, :3], img[:, :, :3], mask=mask)
         feat = get_clip_features(rgb)
         feat /= np.linalg.norm(feat)
-        item_dict_[img_path.stem] = mask, feat
+        item_dict_[img_path.stem] = feat
 
     print("Loaded", len(item_dict_), "item images.")
 
@@ -73,7 +72,7 @@ def load_place_images(place_dir: Path):
         img = imread_safe(str(img_path))
         feat = get_clip_features(img)
         feat /= np.linalg.norm(feat)
-        place_dict_[img_path.stem] = None, feat
+        place_dict_[img_path.stem] = feat
 
     print("Loaded", len(place_dict_), "place images.")
 
@@ -120,7 +119,7 @@ def detect_items(img):
 
     omote_ls = []
     ura_ls = []
-    for item_name, (ref_mask, ref_feat) in item_dict_.items():
+    for item_name, ref_feat in item_dict_.items():
         item_name = item_name.split("_")[0]
         omote_score = match(omote_feat, ref_feat)
         omote_score = adhoc_correction(omote_score, item_name)
@@ -150,9 +149,30 @@ def detect_place(img):
     place_img_feat /= np.linalg.norm(place_img_feat)
 
     ls = []
-    for place_name, (ref_mask, ref_feat) in place_dict_.items():
+    for place_name, ref_feat in place_dict_.items():
         place_name = place_name.split("_")[0]
         ls.append([match(place_img_feat, ref_feat), place_name])
+
+    ls = sorted(ls)
+    # print(ls[-2:])
+
+    return ls[-1]
+
+
+# "FINISH"
+def detect_center_text(img):
+    h, w = img.shape[:2]
+    x1 = int(444 / 1920 * w)
+    x2 = int(1480 / 1920 * w)
+    y1 = int(350 / 1080 * h)
+    y2 = int(590 / 1080 * h)
+    center_img = img[y1:y2, x1:x2]
+    center_img_feat = get_clip_features(center_img)
+    center_img_feat /= np.linalg.norm(center_img_feat)
+
+    ls = []
+    for item_name, ref_feat in center_dict_.items():
+        ls.append([match(center_img_feat, ref_feat), item_name])
 
     ls = sorted(ls)
     # print(ls[-2:])
