@@ -9,11 +9,15 @@ import numpy as np
 import clip
 import torch
 
-from . import digit_ocr
+if __name__ == "__main__":
+    import digit_ocr
+else:
+    from . import digit_ocr
 
 
 item_dict_ = {}
 place_dict_ = {}
+center_dict_ = {}
 
 
 def cv2pil(image):
@@ -77,6 +81,17 @@ def load_place_images(place_dir: Path):
     print("Loaded", len(place_dict_), "place images.")
 
 
+def load_finish_images(finish_dir: Path):
+    all_img_paths = list(finish_dir.glob("*.png"))
+    for img_path in all_img_paths:
+        img = imread_safe(str(img_path))
+        feat = get_clip_features(img)
+        feat /= np.linalg.norm(feat)
+        center_dict_[img_path.stem] = feat
+
+    print("Loaded", len(place_dict_), "finish images.")
+
+
 device, model, clip_preprocess = None, None, None
 
 
@@ -86,6 +101,7 @@ def init(root_dir: Path):
     model, clip_preprocess = clip.load("ViT-B/32", device)
     load_item_images(root_dir / "items")
     load_place_images(root_dir / "place_rembg")
+    load_finish_images(root_dir / "finish")
 
 
 def match(img_feat, ref_feat):
@@ -119,15 +135,15 @@ def detect_items(img):
 
     omote_ls = []
     ura_ls = []
-    for item_name, ref_feat in item_dict_.items():
-        item_name = item_name.split("_")[0]
+    for name, ref_feat in item_dict_.items():
+        name = name.split("_")[0]
         omote_score = match(omote_feat, ref_feat)
-        omote_score = adhoc_correction(omote_score, item_name)
-        omote_ls.append([omote_score, item_name])
+        omote_score = adhoc_correction(omote_score, name)
+        omote_ls.append([omote_score, name])
 
         ura_score = match(ura_feat, ref_feat)
-        ura_score = adhoc_correction(ura_score, item_name)
-        ura_ls.append([ura_score, item_name])
+        ura_score = adhoc_correction(ura_score, name)
+        ura_ls.append([ura_score, name])
 
     omote_ls = sorted(omote_ls)
     ura_ls = sorted(ura_ls)
@@ -149,9 +165,9 @@ def detect_place(img):
     place_img_feat /= np.linalg.norm(place_img_feat)
 
     ls = []
-    for place_name, ref_feat in place_dict_.items():
-        place_name = place_name.split("_")[0]
-        ls.append([match(place_img_feat, ref_feat), place_name])
+    for name, ref_feat in place_dict_.items():
+        name = name.split("_")[0]
+        ls.append([match(place_img_feat, ref_feat), name])
 
     ls = sorted(ls)
     # print(ls[-2:])
@@ -160,7 +176,7 @@ def detect_place(img):
 
 
 # "FINISH"
-def detect_center_text(img):
+def detect_finish(img):
     h, w = img.shape[:2]
     x1 = int(444 / 1920 * w)
     x2 = int(1480 / 1920 * w)
@@ -171,11 +187,12 @@ def detect_center_text(img):
     center_img_feat /= np.linalg.norm(center_img_feat)
 
     ls = []
-    for item_name, ref_feat in center_dict_.items():
-        ls.append([match(center_img_feat, ref_feat), item_name])
+    for name, ref_feat in center_dict_.items():
+        name = name.split("_")[0]
+        ls.append([match(center_img_feat, ref_feat), name])
 
     ls = sorted(ls)
-    # print(ls[-2:])
+    print(ls[-1:])
 
     return ls[-1]
 
@@ -214,29 +231,36 @@ if __name__ == "__main__":
 
         img_list = list(Path("../record").glob("*.png"))
         for i, img_path in enumerate(img_list):
-            if i < 400:
-                continue
+#            if i < 400:
+ #               continue
             img = cv2.imread(str(img_path))
 
             since = time.time()
-            ret = detect_items(img)
+            ret = detect_finish(img)
             print(ret)
-            print(f"({i})[detect_items] Elapsed {time.time() - since:.2f} sec")
+            print(f"({i})[detect_finish] Elapsed {time.time() - since:.2f} sec")
 
-            since = time.time()
-            ret = detect_place(img)
-            print(ret)
-            print(f"({i})[detect_place] Elapsed {time.time() - since:.2f} sec")
+            # since = time.time()
+            # ret = detect_items(img)
+            # print(ret)
+            # print(f"({i})[detect_items] Elapsed {time.time() - since:.2f} sec")
 
-            since = time.time()
-            ret = detect_coin(img)
-            since = time.time()
-            ret = detect_lap(img)
-            print(f"({i})[detect coin/lap] Elapsed {time.time() - since:.2f} sec")
+            # since = time.time()
+            # ret = detect_place(img)
+            # print(ret)
+            # print(f"({i})[detect_place] Elapsed {time.time() - since:.2f} sec")
+
+            # since = time.time()
+            # ret = detect_coin(img)
+            # since = time.time()
+            # ret = detect_lap(img)
+            # print(f"({i})[detect coin/lap] Elapsed {time.time() - since:.2f} sec")
 
             # 大きくて画面に入らないので小さく
-            img_resize = cv2.resize(img, None, fx=0.7, fy=0.7)
+            img_resize = img # cv2.resize(img, None, fx=0.7, fy=0.7)
             cv2.imshow("screenshot", img_resize)
-            cv2.waitKey(0)
+            if ord('q') == cv2.waitKey(0 if ret[0] > 0.8 else 1):
+                break
+            
 
     main()
