@@ -33,7 +33,7 @@ speak_queue = []
 tts_queue_ = []
 is_finish = False
 
-mk8dx_history = []
+mk8dx_history_ = []
 
 latest_place = [0, "1"]
 
@@ -296,38 +296,37 @@ def run_mk8dx_loop():
 
 
 def parse_mk8dx_screen(img):
-    global mk8dx_history
+    global mk8dx_history_
+
+    # 画像解析
     ret_coin, n_coin = MK8DX.detect_coin(img)
     ret_lap, n_lap = MK8DX.detect_lap(img)
     omote, ura = MK8DX.detect_items(img)
+    place = MK8DX.detect_place(img)
+    finish = False
+
+    # 画像マッチング系はしきい値を下回ったら無効
+    # 裏アイテムは表がnoneなら絶対none (テレサは例外だけど・・・)
     if omote[0] < 0.81:
         omote = [0, "none"]
     if omote[1] == "none" or ura[0] < 0.7:
         ura = [0, "none"]
-
-    place = MK8DX.detect_place(img)
     if place[0] < 0.7:
         place = [0, "-1"]
 
-    mk8dx_history.append([n_coin, n_lap, omote, ura, place])
+    # OCR系は変な数値だったら無効
+    if 0 <= n_coin <= 10:
+        ret_coin = False
+    if 0 <= n_lap <= 3:
+        ret_lap = False
 
-    if not ret_coin or not (0 <= n_coin <= 10):
-        return False, None
-    if not ret_lap or not (0 <= n_lap <= 3):
-        return False, None
-    if place[1] == "-1":
-        return False, None
+    # コイン・ラップが見えていたらレース中なはず
+    is_racing = ret_coin and ret_lap  # and place[1] != "-1"
 
-    # print(f"[C] Elapsed {time.time() - since:.2f} sec")
-    # since = time.time()
-
-    if len(mk8dx_history) >= 3:
-        mk8dx_history = mk8dx_history[-3:]
-
-    if len(mk8dx_history) < 3:
+    if not is_racing:
         return False, None
 
-    def is_same_history_item(a, b):
+    def same(a, b):
         for i in range(2):
             if a[i] != b[i]:
                 return False
@@ -338,13 +337,20 @@ def parse_mk8dx_screen(img):
 
         return True
 
-    # 3フレーム同じ結果だったら採用してOBS側を更新
-    if not is_same_history_item(mk8dx_history[-1], mk8dx_history[-2]):
-        return False, None
-    if not is_same_history_item(mk8dx_history[-2], mk8dx_history[-3]):
+    mk8dx_history_.append([n_coin, n_lap, omote, ura, place])
+    if len(mk8dx_history_) >= 3:
+        mk8dx_history_ = mk8dx_history_[-3:]
+
+    if len(mk8dx_history_) < 3:
         return False, None
 
-    return True, (n_coin, n_lap, omote, ura, place)
+    # 3フレーム同じ結果だったら採用してOBS側を更新
+    # TODO: 全部の要素の一致を見なくても良いのでは？個々の要素ごとに一致を見ればよいのでは
+    for i in range(2):
+        if same(mk8dx_history_[-1 - i :], mk8dx_history_[-2 - i :]):
+            return False, None
+
+    return True, mk8dx_history_[-1]
 
 
 def send_mk8dx_info_to_OBS(n_coin, n_lap, omote, ura, place):
@@ -447,8 +453,8 @@ def init(args):
 
 
 def reset_mk8dx():
-    global mk8dx_history
-    mk8dx_history = []
+    global mk8dx_history_
+    mk8dx_history_ = []
     OBS.set_text("zundamon_zimaku", "")
     send_mk8dx_info_to_OBS(0, 0, [1, "--"], [1, "--"], [1, "--"])
 
