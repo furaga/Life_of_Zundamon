@@ -85,11 +85,8 @@ def load_finish_images(finish_dir: Path):
     all_img_paths = list(finish_dir.glob("*.png"))
     for img_path in all_img_paths:
         img = imread_safe(str(img_path))
-        feat = get_clip_features(img)
-        feat /= np.linalg.norm(feat)
-        center_dict_[img_path.stem] = feat
-
-    print("Loaded", len(place_dict_), "finish images.")
+        center_dict_[img_path.stem] = img
+    print("Loaded", len(place_dict_), "finish tempalte images.")
 
 
 device, model, clip_preprocess = None, None, None
@@ -183,16 +180,22 @@ def detect_finish(img):
     y1 = int(350 / 1080 * h)
     y2 = int(590 / 1080 * h)
     center_img = img[y1:y2, x1:x2]
-    center_img_feat = get_clip_features(center_img)
-    center_img_feat /= np.linalg.norm(center_img_feat)
+
+    if w != 1920 or h != 1080:
+        # 画像サイズ違ったらリサイズ
+        fx = 1920 / w
+        fy = 1080 / h
+        center_img = cv2.resize(center_img, None, fx=fx, fy=fy)
 
     ls = []
-    for name, ref_feat in center_dict_.items():
+    for name, tmpl in center_dict_.items():
         name = name.split("_")[0]
-        ls.append([match(center_img_feat, ref_feat), name])
+        result = cv2.matchTemplate(center_img, tmpl, cv2.TM_CCORR_NORMED)
+        _, max_val, _, _ = cv2.minMaxLoc(result)
+        ls.append([max_val, name])
 
     ls = sorted(ls)
-    print(ls[-1:])
+    # print(ls[-2:])
 
     return ls[-1]
 
@@ -231,8 +234,8 @@ if __name__ == "__main__":
 
         img_list = list(Path("../record").glob("*.png"))
         for i, img_path in enumerate(img_list):
-#            if i < 400:
- #               continue
+            #if i < 400:
+            #    continue
             img = cv2.imread(str(img_path))
 
             since = time.time()
@@ -257,10 +260,9 @@ if __name__ == "__main__":
             # print(f"({i})[detect coin/lap] Elapsed {time.time() - since:.2f} sec")
 
             # 大きくて画面に入らないので小さく
-            img_resize = img # cv2.resize(img, None, fx=0.7, fy=0.7)
+            img_resize = cv2.resize(img, None, fx=0.7, fy=0.7)
             cv2.imshow("screenshot", img_resize)
-            if ord('q') == cv2.waitKey(0 if ret[0] > 0.8 else 1):
+            if ord("q") == cv2.waitKey(0 if ret[0] > 0.95 else 1):
                 break
-            
 
     main()

@@ -33,7 +33,7 @@ all_monologues_ = []
 speak_queue_ = []
 mk8dx_speak_queue_ = []
 tts_queue_ = []
-is_finish_ = False
+app_done_ = False
 
 mk8dx_raw_status_history_ = []
 mk8dx_status_history_ = []
@@ -165,8 +165,8 @@ def play_scenario(author, question, mk8dx: bool):
 #
 @fire_and_forget
 def run_tts_thread():
-    global is_finish_
-    while not is_finish_:
+    global app_done_
+    while not app_done_:
         try:
             text = ""
             with get_lock("tts_queue"):
@@ -183,7 +183,7 @@ def run_tts_thread():
                 time.sleep(0.1)
         except Exception as e:
             print(str(e), "\n", traceback.format_exc(), flush=True)
-            is_finish_ = True
+            app_done_ = True
             break
 
 
@@ -216,8 +216,8 @@ def request_tts(speaker_name, text):
 #
 @fire_and_forget
 def run_speak_thread():
-    global is_finish_
-    while not is_finish_:
+    global app_done_
+    while not app_done_:
         try:
             spoken = False
 
@@ -254,7 +254,7 @@ def run_speak_thread():
 
         except Exception as e:
             print(str(e), "\n", traceback.format_exc(), flush=True)
-            is_finish_ = True
+            app_done_ = True
             break
 
 
@@ -281,20 +281,32 @@ def request_mk8dx_speak(text, wav):
 # マリカの画面を解析して実況させる
 #
 
+is_finished_screen_ = False
+
 
 @fire_and_forget
 def run_mk8dx_game_capture_thread():
-    global is_finish_, mk8dx_status_history_
+    global app_done_, mk8dx_status_history_, mk8dx_status_updated_, is_finished_screen_
     with open("mk8dx_chat_history.txt", "a", encoding="utf8") as f:
         prev_lap = -1
         lap_start_time = time.time()
-        while not is_finish_:
+        last_finished_time = 0
+        while not app_done_:
             try:
                 since = time.time()
 
                 # ゲーム画面を解析
                 img = OBS.capture_game_screen()
-                ret, parse_result = parse_mk8dx_screen(img)
+                ret, parse_result, is_finished = parse_mk8dx_screen(img)
+
+                # "FINISH"の文字が出たら5秒間くらい何もしゃべらないモードにしたい
+                if is_finished:
+                    is_finished_screen_ = True
+                    last_finished_time = time.time()
+                elif time.time() - last_finished_time > 5:
+                    is_finished_screen_ = False
+
+                send_mk8dx_finished_to_OBS(is_finished_screen_)
                 if not ret:
                     continue
 
@@ -319,17 +331,15 @@ def run_mk8dx_game_capture_thread():
                 )
             except Exception as e:
                 print(str(e), "\n", traceback.format_exc(), flush=True)
-                is_finish_ = True
+                app_done_ = True
                 break
 
 
 @fire_and_forget
 def run_mk8dx_think_tts_thread():
-    global is_finish_, latest_place_
+    global app_done_, latest_place_, mk8dx_status_updated_
     with open("mk8dx_chat_history.txt", "a", encoding="utf8") as f:
-        prev_lap = -1
-        lap_start_time = time.time()
-        while not is_finish_:
+        while not app_done_:
             try:
                 since = time.time()
 
@@ -341,6 +351,11 @@ def run_mk8dx_think_tts_thread():
                         if len(mk8dx_status_history_) >= 1:
                             cur_status = mk8dx_status_history_[-1]
                         mk8dx_status_updated_ = False
+
+                # フィニッシュ画面は黙る
+                if is_finished_screen_:
+                    time.sleep(0.1)
+                    continue
 
                 # 更新ないのでスキップ
                 if cur_status is None:
@@ -382,7 +397,7 @@ def run_mk8dx_think_tts_thread():
                 )
             except Exception as e:
                 print(str(e), "\n", traceback.format_exc(), flush=True)
-                is_finish_ = True
+                app_done_ = True
                 break
 
 
@@ -394,7 +409,9 @@ def parse_mk8dx_screen(img):
     ret_lap, n_lap = MK8DX.detect_lap(img)
     omote, ura = MK8DX.detect_items(img)
     place = MK8DX.detect_place(img)
-    finish = False
+
+    finish = MK8DX.detect_finish(img)
+    is_finished = finish[0] > 0.95 and finish[1] == "finish"
 
     # 画像マッチング系はしきい値を下回ったら無効
     # 裏アイテムは表がnoneなら絶対none (テレサは例外だけど・・・)
@@ -415,7 +432,7 @@ def parse_mk8dx_screen(img):
     is_racing = ret_coin and ret_lap  # and place[1] != "-1"
 
     if not is_racing:
-        return False, None
+        return False, None, is_finished
 
     def same(a, b):
         for i in range(2):
@@ -428,12 +445,12 @@ def parse_mk8dx_screen(img):
 
         return True
 
-    mk8dx_raw_status_history_.append([n_coin, n_lap, omote, ura, place])
+    mk8dx_raw_status_history_.append([n_coin, n_lap, omote, ura, place, finish])
     if len(mk8dx_raw_status_history_) >= 3:
         mk8dx_raw_status_history_ = mk8dx_raw_status_history_[-3:]
 
     if len(mk8dx_raw_status_history_) < 3:
-        return False, None
+        return False, None, is_finished
 
     # 3フレーム同じ結果だったら採用してOBS側を更新
     # TODO: 全部の要素の一致を見なくても良いのでは？個々の要素ごとに一致を見ればよいのでは
@@ -441,9 +458,9 @@ def parse_mk8dx_screen(img):
         if same(
             mk8dx_raw_status_history_[-1 - i :], mk8dx_raw_status_history_[-2 - i :]
         ):
-            return False, None
+            return False, None, is_finished
 
-    return True, mk8dx_raw_status_history_[-1]
+    return True, mk8dx_raw_status_history_[-1], is_finished
 
 
 def send_mk8dx_status_to_OBS(n_coin, n_lap, lap_time, omote, ura, place):
@@ -454,15 +471,23 @@ def send_mk8dx_status_to_OBS(n_coin, n_lap, lap_time, omote, ura, place):
     OBS.set_text("mk8dx_status", text)
 
 
+def send_mk8dx_finished_to_OBS(is_finish_screen):
+    if is_finish_screen:
+        text = f"FINISHED"
+    else:
+        text = f""
+    OBS.set_text("mk8dx_status_finish", text)
+
+
 #
 # Youtubeのチャットからコメントを拾って回答するボットを動かす
 #
 @fire_and_forget
 def run_chatbot_thread():
-    global is_finish_
+    global app_done_
 
     prev_listen_time = time.time()
-    while not is_finish_:
+    while not app_done_:
         try:
             # Youtubeの最新のコメントを拾う
             ret, author, question = youtube_listen_chat()
@@ -497,17 +522,17 @@ def run_chatbot_thread():
             prev_listen_time = time.time()
         except Exception as e:
             print(str(e), "\n", traceback.format_exc(), flush=True)
-            is_finish_ = True
+            app_done_ = True
             break
 
 
 # YouTubeのコメント欄の最新のチャットを取得する
 def youtube_listen_chat():
-    global is_finish_
+    global app_done_
     if not youtube_chat_.is_alive():
         # TODO: ちゃんとした対応？
         print("[listen] ERROR: chat is dead.")
-        is_finish_ = True
+        app_done_ = True
         time.sleep(0.1)
         exit()
     # 40文字以内のコメントのみ取得（長文コメントは無視）
@@ -546,13 +571,15 @@ def init(args):
 
 
 def reset_mk8dx():
-    global mk8dx_raw_status_history_, mk8dx_status_history_, mk8dx_status_updated_
+    global mk8dx_raw_status_history_, mk8dx_status_history_, mk8dx_status_updated_, is_finished_screen_
     with get_lock("mk8dx_history"):
         mk8dx_raw_status_history_ = []
         mk8dx_status_history_ = []
         mk8dx_status_updated_ = False
+        is_finished_screen_ = False
     OBS.set_text("zundamon_zimaku", "")
     send_mk8dx_status_to_OBS(0, 0, [1, "--"], 0, [1, "--"], [1, "--"])
+    send_mk8dx_finished_to_OBS(False)
 
 
 async def main(args) -> None:
@@ -569,7 +596,7 @@ async def main(args) -> None:
 
     # メインループは何もしない（ヘルスチェックくらいする？)
     while True:
-        if is_finish_:
+        if app_done_:
             break
         await asyncio.sleep(1)
 
