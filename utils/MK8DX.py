@@ -86,7 +86,7 @@ def load_finish_images(finish_dir: Path):
     for img_path in all_img_paths:
         img = imread_safe(str(img_path))
         center_dict_[img_path.stem] = img
-    print("Loaded", len(place_dict_), "finish tempalte images.")
+    print("Loaded", len(center_dict_), "finish tempalte images.")
 
 
 device, model, clip_preprocess = None, None, None
@@ -234,7 +234,7 @@ if __name__ == "__main__":
 
         img_list = list(Path("../record").glob("*.png"))
         for i, img_path in enumerate(img_list):
-            #if i < 400:
+            # if i < 400:
             #    continue
             img = cv2.imread(str(img_path))
 
