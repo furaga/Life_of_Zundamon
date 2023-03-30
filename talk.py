@@ -105,7 +105,7 @@ def think_mk8dx(n_coin, n_lap, lap_time, omote, ura, place, delta_coin):
         # 被弾したらランダムな被弾セリフを流す
         with open("data/config/mk8dx/damage_voice.txt", "r", encoding="utf-8") as f:
             answer = random.choice(damage_voices)
-            ret, answer, priority = True, answer, 1
+            ret, answer = True, answer
             print("[think_mk8dx] damage voice:", answer)
     else:
         # OpenAI APIで回答生成
@@ -120,11 +120,10 @@ def think_mk8dx(n_coin, n_lap, lap_time, omote, ura, place, delta_coin):
             chat_history=[],
             is_race_mode=True,
         )
-        priority = 0
     answer = answer.replace("「", "").replace("」", "")
     if not ret:
-        return "", 0
-    return answer, priority
+        return ""
+    return answer
 
 
 # ランダムで流す独白
@@ -236,22 +235,11 @@ def run_speak_thread():
 
             if len(text) > 0:
                 since = time.time()
-                speak(text, wav)
+                print(f"[run_speak_thread] Start: {text}")
+                with get_lock("speaking"):
+                    speak(text, wav)
                 print(
-                    f"[run_speak_thread] {text} | elapsed {time.time() - since:.2f} sec"
-                )
-
-            # マリオカート用
-            text, wav = "", None
-            with get_lock("mk8dx_speak_queue"):
-                if len(mk8dx_speak_queue_) > 0:
-                    text, wav, _ = mk8dx_speak_queue_.pop(0)
-
-            if len(text) > 0:
-                since = time.time()
-                speak(text, wav)
-                print(
-                    f"[run_speak_thread(mk8dx)] {text} | elapsed {time.time() - since:.2f} sec"
+                    f"[run_speak_thread] Finish: {text} | elapsed {time.time() - since:.2f} sec"
                 )
 
             time.sleep(0.1)
@@ -274,23 +262,6 @@ def speak(text, wav):
 def request_speak(text, wav):
     with get_lock("speak_queue"):
         speak_queue_.append((text, wav))
-
-
-def request_mk8dx_speak(text, wav, priority=0):
-    with get_lock("mk8dx_speak_queue"):
-        if len(mk8dx_speak_queue_) >= 1:
-            print("PP", mk8dx_speak_queue_[0][0], mk8dx_speak_queue_[0][2])
-        print("CC", text, priority)
-
-        if len(mk8dx_speak_queue_) >= 1 and mk8dx_speak_queue_[0][2] > priority:
-            return
-        mk8dx_speak_queue_.clear()
-        mk8dx_speak_queue_.append((text, wav, priority))
-
-
-def cancel_mk8dx_speak():
-    with get_lock("mk8dx_speak_queue"):
-        mk8dx_speak_queue_.clear()
 
 
 #
@@ -321,7 +292,6 @@ def run_mk8dx_game_capture_thread():
                     is_finished_screen_ = True
                     last_finished_time = time.time()
                 elif time.time() - last_finished_time > 15:
-                    cancel_mk8dx_speak()
                     is_finished_screen_ = False
 
                 send_mk8dx_finished_to_OBS(is_finished_screen_)
@@ -369,8 +339,6 @@ def run_mk8dx_think_tts_thread():
                 cur_status = None
                 with get_lock("mk8dx_status"):
                     if mk8dx_status_updated_:
-                        #  if len(mk8dx_status_history_) >= 2:
-                        #      prev_status = mk8dx_status_history_[-2]
                         if len(mk8dx_status_history_) >= 1:
                             cur_status = mk8dx_status_history_[-1]
                         mk8dx_status_updated_ = False
@@ -392,7 +360,7 @@ def run_mk8dx_think_tts_thread():
                 prev_status = cur_status
 
                 latest_place_ = place
-                answer, priority = think_mk8dx(
+                answer = think_mk8dx(
                     n_coin, n_lap, lap_time, omote, ura, place, delta_coin
                 )
 
@@ -414,8 +382,16 @@ def run_mk8dx_think_tts_thread():
 
                     # 再生（非同期）
                     if not is_finished_screen_:
-                        with get_lock("speak"):
-                            speak(answer, wav) #, priority)
+                        with get_lock("speaking"):
+                            print(
+                                f"[run_mk8dx] Start to Speak: {answer} | elapsed {time.time() - since:.2f} sec",
+                                flush=True,
+                            )
+                            speak(answer, wav)
+                            print(
+                                f"[run_mk8dx] Finish to Speak: {answer} | elapsed {time.time() - since:.2f} sec",
+                                flush=True,
+                            )
 
                 print(
                     f"[run_mk8dx] {answer} | elapsed {time.time() - since:.2f} sec",
