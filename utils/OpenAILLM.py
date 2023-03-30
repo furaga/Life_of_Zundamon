@@ -206,8 +206,8 @@ def init(prompt_path: Path):
 
     # load json file
     with open(prompt_path, "r", encoding="utf8") as f:
-        prompt_path_ = prompt_path
         prompt_data_ = json.load(f)
+    prompt_path_ = prompt_path
 
 
 if __name__ == "__main__":
