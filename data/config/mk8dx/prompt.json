@@ -20,13 +20,6 @@
     ],
     "mk8dx_race": [
         {
-            "role": "system",
-            "content": "下記はここまでの会話です。"
-        },
-        {
-            "role": "chat_history@"
-        },
-        {
             "role": "personality@./personality_mk8dx.txt"
         },
         {
@@ -49,13 +42,6 @@
         }
     ],
     "mk8dx_result": [
-        {
-            "role": "system",
-            "content": "下記はここまでの会話です。"
-        },
-        {
-            "role": "chat_history@"
-        },
         {
             "role": "personality@./personality_mk8dx.txt"
         },

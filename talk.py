@@ -220,7 +220,6 @@ def run_speak_thread():
         try:
             # 通常
             text, wav = "", None
-            print("[run_speak_thread] A", flush=True)
             with get_lock("speak_queue"):
                 if len(speak_queue_) > 0:
                     text, wav = speak_queue_.pop(0)
@@ -233,7 +232,6 @@ def run_speak_thread():
                 )
 
             # マリオカート用
-            print("[run_speak_thread] B", flush=True)
             text, wav = "", None
             with get_lock("mk8dx_speak_queue"):
                 if len(mk8dx_speak_queue_) > 0:
@@ -246,7 +244,6 @@ def run_speak_thread():
                     f"[run_speak_thread(mk8dx)] {text} | elapsed {time.time() - since:.2f} sec"
                 )
 
-            print("[run_speak_thread] C", flush=True)
             time.sleep(0.1)
 
         except Exception as e:
@@ -302,11 +299,13 @@ def run_mk8dx_game_capture_thread():
                 img = OBS.capture_game_screen()
                 ret, parse_result, is_finished = parse_mk8dx_screen(img)
 
-                # "FINISH"の文字が出たら5秒間くらい何もしゃべらないモードにしたい
+                # "FINISH"の文字が出たらしばらく何もしゃべらないモードにしたい
                 if is_finished:
                     is_finished_screen_ = True
                     last_finished_time = time.time()
                 elif time.time() - last_finished_time > 15:
+                    with get_lock("mk8dx_speak_queue"):
+                        mk8dx_speak_queue_.clear()
                     is_finished_screen_ = False
 
                 send_mk8dx_finished_to_OBS(is_finished_screen_)
@@ -397,7 +396,8 @@ def run_mk8dx_think_tts_thread():
                     wav = tts(answer)
 
                     # 再生（非同期）
-                    request_mk8dx_speak(answer, wav)
+                    if not is_finished_screen_:
+                        request_mk8dx_speak(answer, wav)
 
                 print(
                     f"[run_mk8dx] {answer} | elapsed {time.time() - since:.2f} sec",
@@ -464,7 +464,7 @@ def parse_mk8dx_screen(img):
 
     # 3フレーム同じ結果だったら採用してOBS側を更新
     # TODO: 全部の要素の一致を見なくても良いのでは？個々の要素ごとに一致を見ればよいのでは
-    for i in range(2):
+    for i in range(1):
         if not same(
             mk8dx_raw_status_history_[-1 - i], mk8dx_raw_status_history_[-2 - i]
         ):
