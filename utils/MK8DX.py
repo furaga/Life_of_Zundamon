@@ -125,9 +125,9 @@ def detect_items(img):
     ura_feat /= np.linalg.norm(ura_feat)
 
     def adhoc_correction(score, item_name):
-        if item_name in ["キノコ", "バナナ", "緑甲羅", "赤甲羅"]:
-            # XXXよりトリプルXXXのスコアがなぜか大きく出がちなので、シングルアイテム系にバフを掛ける
-            return score + 0.02
+        if item_name.startswith("トリプル"):
+            # XXXよりトリプルXXXのスコアがなぜか大きく出がちなので、トリプル系にデバフを掛ける
+            return score - 0.02
         return score
 
     omote_ls = []

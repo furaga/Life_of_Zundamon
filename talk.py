@@ -101,23 +101,30 @@ def think(author, question):
 
 
 def think_mk8dx(n_coin, n_lap, lap_time, omote, ura, place, delta_coin):
-    # TODO: lap_time, delta_coinを使う
-    # OpenAI APIで回答生成
-    ret, answer = OpenAILLM.ask_mk8dx(
-        n_coin,
-        n_lap,
-        lap_time,
-        omote[1],
-        ura[1],
-        place[1],
-        delta_coin,
-        chat_history=[],
-        is_race_mode=True,
-    )
+    if delta_coin < 0:  # and random.random() < 0.9:
+        # 被弾したらランダムな被弾セリフを流す
+        with open("data/config/mk8dx/damage_voice.txt", "r", encoding="utf-8") as f:
+            answer = random.choice(damage_voices)
+            ret, answer, priority = True, answer, 1
+            print("[think_mk8dx] damage voice:", answer)
+    else:
+        # OpenAI APIで回答生成
+        ret, answer = OpenAILLM.ask_mk8dx(
+            n_coin,
+            n_lap,
+            lap_time,
+            omote[1],
+            ura[1],
+            place[1],
+            delta_coin,
+            chat_history=[],
+            is_race_mode=True,
+        )
+        priority = 0
     answer = answer.replace("「", "").replace("」", "")
     if not ret:
-        return ""
-    return answer
+        return "", 0
+    return answer, priority
 
 
 # ランダムで流す独白
@@ -187,6 +194,9 @@ def run_tts_thread():
 
 
 def tts(text):
+    if text in tts_cache_:
+        return tts_cache_[text]
+
     res1 = requests.post(
         "http://127.0.0.1:50021/audio_query",
         params={"text": text, "speaker": speaker_},
@@ -235,7 +245,7 @@ def run_speak_thread():
             text, wav = "", None
             with get_lock("mk8dx_speak_queue"):
                 if len(mk8dx_speak_queue_) > 0:
-                    text, wav = mk8dx_speak_queue_.pop(0)
+                    text, wav, _ = mk8dx_speak_queue_.pop(0)
 
             if len(text) > 0:
                 since = time.time()
@@ -266,9 +276,16 @@ def request_speak(text, wav):
         speak_queue_.append((text, wav))
 
 
-def request_mk8dx_speak(text, wav):
+def request_mk8dx_speak(text, wav, priority=0):
     with get_lock("mk8dx_speak_queue"):
-        mk8dx_speak_queue_.append((text, wav))
+        if len(mk8dx_speak_queue_) >= 1:
+            print("PP", mk8dx_speak_queue_[0][0], mk8dx_speak_queue_[0][2])
+        print("CC", text, priority)
+
+        if len(mk8dx_speak_queue_) >= 1 and mk8dx_speak_queue_[0][2] > priority:
+            return
+        mk8dx_speak_queue_.clear()
+        mk8dx_speak_queue_.append((text, wav, priority))
 
 
 def cancel_mk8dx_speak():
@@ -304,8 +321,7 @@ def run_mk8dx_game_capture_thread():
                     is_finished_screen_ = True
                     last_finished_time = time.time()
                 elif time.time() - last_finished_time > 15:
-                    with get_lock("mk8dx_speak_queue"):
-                        mk8dx_speak_queue_.clear()
+                    cancel_mk8dx_speak()
                     is_finished_screen_ = False
 
                 send_mk8dx_finished_to_OBS(is_finished_screen_)
@@ -345,22 +361,22 @@ def run_mk8dx_think_tts_thread():
     global app_done_, latest_place_, mk8dx_status_updated_
     print("[run_mk8dx_think_tts_thread] Start")
     with open("mk8dx_chat_history.txt", "a", encoding="utf8") as f:
+        prev_status = None
         while not app_done_:
             try:
                 since = time.time()
 
-                prev_status, cur_status = None, None
+                cur_status = None
                 with get_lock("mk8dx_status"):
                     if mk8dx_status_updated_:
-                        if len(mk8dx_status_history_) >= 2:
-                            prev_status = mk8dx_status_history_[-2]
+                        #  if len(mk8dx_status_history_) >= 2:
+                        #      prev_status = mk8dx_status_history_[-2]
                         if len(mk8dx_status_history_) >= 1:
                             cur_status = mk8dx_status_history_[-1]
                         mk8dx_status_updated_ = False
 
                 # フィニッシュ画面は黙る
                 if is_finished_screen_:
-                    cancel_mk8dx_speak()
                     time.sleep(0.1)
                     continue
 
@@ -373,9 +389,10 @@ def run_mk8dx_think_tts_thread():
                 delta_coin = (
                     cur_status[0] - prev_status[0] if prev_status is not None else 0
                 )
+                prev_status = cur_status
 
                 latest_place_ = place
-                answer = think_mk8dx(
+                answer, priority = think_mk8dx(
                     n_coin, n_lap, lap_time, omote, ura, place, delta_coin
                 )
 
@@ -397,7 +414,8 @@ def run_mk8dx_think_tts_thread():
 
                     # 再生（非同期）
                     if not is_finished_screen_:
-                        request_mk8dx_speak(answer, wav)
+                        with get_lock("speak"):
+                            speak(answer, wav) #, priority)
 
                 print(
                     f"[run_mk8dx] {answer} | elapsed {time.time() - since:.2f} sec",
@@ -585,6 +603,15 @@ def init(args):
     global all_monologues_
     with open("data/soliloquys.txt", encoding="utf8") as f:
         all_monologues_ = [line.strip() for line in f if len(line.strip()) > 1]
+
+    with open("data/config/mk8dx/damage_voice.txt", "r", encoding="utf-8") as f:
+        for text in f:
+            damage_voices.append(text)
+            tts_cache_[text] = tts(text)
+
+
+damage_voices = []
+tts_cache_ = {}
 
 
 def reset_mk8dx():
