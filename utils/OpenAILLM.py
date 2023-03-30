@@ -50,10 +50,10 @@ def chat_completion(prompt: List, timeout: float) -> Tuple[bool, str]:
                 request_timeout=timeout,
             )
             content = response["choices"][0]["message"]["content"]
-            print(
-                f"[chat_completion] content={content} | Elapsed {time.time() - since:.2f} sec",
-                flush=True,
-            )
+            # print(
+            #     f"[chat_completion] content={content} | Elapsed {time.time() - since:.2f} sec",
+            #     flush=True,
+            # )
             return True, content
         except openai.error.RateLimitError as e:
             print("Prompt:", prompt, flush=True)
