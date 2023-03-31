@@ -196,15 +196,16 @@ def tts(text):
     if text in tts_cache_:
         return tts_cache_[text]
 
-    res1 = requests.post(
-        "http://127.0.0.1:50021/audio_query",
-        params={"text": text, "speaker": speaker_},
-    )
-    res2 = requests.post(
-        "http://127.0.0.1:50021/synthesis",
-        params={"speaker": speaker_},
-        data=json.dumps(res1.json()),
-    )
+    with get_lock("tts"):
+        res1 = requests.post(
+            "http://127.0.0.1:50021/audio_query",
+            params={"text": text, "speaker": speaker_},
+        )
+        res2 = requests.post(
+            "http://127.0.0.1:50021/synthesis",
+            params={"speaker": speaker_},
+            data=json.dumps(res1.json()),
+        )
     return res2.content
 
 
@@ -236,8 +237,7 @@ def run_speak_thread():
             if len(text) > 0:
                 since = time.time()
                 print(f"[run_speak_thread] Start: {text}")
-                with get_lock("speaking"):
-                    speak(text, wav)
+                speak(text, wav)
                 print(
                     f"[run_speak_thread] Finish: {text} | elapsed {time.time() - since:.2f} sec"
                 )
@@ -251,12 +251,13 @@ def run_speak_thread():
 
 
 def speak(text, wav):
-    # OBSの字幕変更
-    OBS.set_text("zundamon_zimaku", text)
+    with get_lock("speak"):
+        # OBSの字幕変更
+        OBS.set_text("zundamon_zimaku", text)
 
-    # 音声再生
-    play_obj = simpleaudio.play_buffer(wav, 1, 2, 24000)
-    play_obj.wait_done()
+        # 音声再生
+        play_obj = simpleaudio.play_buffer(wav, 1, 2, 24000)
+        play_obj.wait_done()
 
 
 def request_speak(text, wav):
@@ -382,16 +383,15 @@ def run_mk8dx_think_tts_thread():
 
                     # 再生（非同期）
                     if not is_finished_screen_:
-                        with get_lock("speaking"):
-                            print(
-                                f"[run_mk8dx] Start to Speak: {answer} | elapsed {time.time() - since:.2f} sec",
-                                flush=True,
-                            )
-                            speak(answer, wav)
-                            print(
-                                f"[run_mk8dx] Finish to Speak: {answer} | elapsed {time.time() - since:.2f} sec",
-                                flush=True,
-                            )
+                        print(
+                            f"[run_mk8dx] Start to Speak: {answer} | elapsed {time.time() - since:.2f} sec",
+                            flush=True,
+                        )
+                        speak(answer, wav)
+                        print(
+                            f"[run_mk8dx] Finish to Speak: {answer} | elapsed {time.time() - since:.2f} sec",
+                            flush=True,
+                        )
 
                 print(
                     f"[run_mk8dx] {answer} | elapsed {time.time() - since:.2f} sec",
