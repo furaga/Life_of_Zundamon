@@ -103,10 +103,9 @@ def think(author, question):
 def think_mk8dx(n_coin, n_lap, lap_time, omote, ura, place, delta_coin):
     if delta_coin < 0:  # and random.random() < 0.9:
         # 被弾したらランダムな被弾セリフを流す
-        with open("data/config/mk8dx/damage_voice.txt", "r", encoding="utf-8") as f:
-            answer = random.choice(damage_voices)
-            ret, answer = True, answer
-            print("[think_mk8dx] damage voice:", answer)
+        answer = random.choice(damage_voices)
+        print("[think_mk8dx] damage voice:", answer)
+        return answer, "mk8dx_reaction"
     else:
         # OpenAI APIで回答生成
         ret, answer = OpenAILLM.ask_mk8dx(
@@ -120,10 +119,10 @@ def think_mk8dx(n_coin, n_lap, lap_time, omote, ura, place, delta_coin):
             chat_history=[],
             is_race_mode=True,
         )
-    answer = answer.replace("「", "").replace("」", "")
-    if not ret:
-        return ""
-    return answer
+        answer = answer.replace("「", "").replace("」", "")
+        if not ret:
+            return "", ""
+        return answer, "mk8dx"
 
 
 # ランダムで流す独白
@@ -232,7 +231,7 @@ def run_speak_thread():
             text, wav = "", None
             with get_lock("speak_queue"):
                 if len(speak_queue_) > 0:
-                    text, wav = speak_queue_.pop(0)
+                    text, wav, _ = speak_queue_.pop(0)
 
             if len(text) > 0:
                 since = time.time()
@@ -250,19 +249,32 @@ def run_speak_thread():
             break
 
 
+play_obj_ = None
+
+
 def speak(text, wav):
+    global play_obj_
     with get_lock("speak"):
         # OBSの字幕変更
         OBS.set_text("zundamon_zimaku", text)
 
         # 音声再生
-        play_obj = simpleaudio.play_buffer(wav, 1, 2, 24000)
-        play_obj.wait_done()
+        play_obj_ = simpleaudio.play_buffer(wav, 1, 2, 24000)
+        play_obj_.wait_done()
 
 
-def request_speak(text, wav):
+def request_speak(text, wav, category="normal"):
     with get_lock("speak_queue"):
-        speak_queue_.append((text, wav))
+        if category == "normal":
+            speak_queue_.append((text, wav, category))
+        elif category == "mk8dx":
+            # mk8dxの実況コメントは最新のものだけなる早で再生したい
+            for i in range(len(speak_queue_) - 1, -1, -1):
+                if speak_queue_[i][2] == "mk8dx":
+                    del speak_queue_[i]
+            speak_queue_.insert(0, (text, wav, category))
+        elif category == "mk8dx_reaction":
+            speak_queue_.insert(0, (text, wav, category))
 
 
 #
@@ -361,7 +373,7 @@ def run_mk8dx_think_tts_thread():
                 prev_status = cur_status
 
                 latest_place_ = place
-                answer = think_mk8dx(
+                answer, category = think_mk8dx(
                     n_coin, n_lap, lap_time, omote, ura, place, delta_coin
                 )
 
@@ -383,18 +395,14 @@ def run_mk8dx_think_tts_thread():
 
                     # 再生（非同期）
                     if not is_finished_screen_:
-                        print(
-                            f"[run_mk8dx] Start to Speak: {answer} | elapsed {time.time() - since:.2f} sec",
-                            flush=True,
-                        )
-                        speak(answer, wav)
-                        print(
-                            f"[run_mk8dx] Finish to Speak: {answer} | elapsed {time.time() - since:.2f} sec",
-                            flush=True,
-                        )
+                        if category == "mk8dx_reaction":
+                            # リアクションは即音を鳴らしたい
+                            if play_obj_ is not None and play_obj_.is_playing():
+                                play_obj_.stop()
+                        request_speak(answer, wav, category)
 
                 print(
-                    f"[run_mk8dx] {answer} | elapsed {time.time() - since:.2f} sec",
+                    f"[run_mk8dx] {answer} ({category}) | elapsed {time.time() - since:.2f} sec",
                     flush=True,
                 )
                 time.sleep(0.1)
@@ -582,6 +590,7 @@ def init(args):
 
     with open("data/config/mk8dx/damage_voice.txt", "r", encoding="utf-8") as f:
         for text in f:
+            text = text.strip()
             damage_voices.append(text)
             tts_cache_[text] = tts(text)
 
