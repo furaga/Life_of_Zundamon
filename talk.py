@@ -135,10 +135,8 @@ def play_scenario(author, question, mk8dx: bool):
         print(">[play_scenario] nf", flush=True)
         reset_mk8dx()
         return True
-    elif (mk8dx and author == "furaga" and question == "まあまあ") or (
-        mk8dx and is_finishing_
-    ):
-        # ゴールの感想を言って、リセットさせたい
+    elif mk8dx and is_finishing_:
+        # ゴールの感想を言わせたい
         if mk8dx_spoken_summary:
             return False
 
@@ -161,7 +159,6 @@ def play_scenario(author, question, mk8dx: bool):
         if not ret:
             return False
         request_tts(BOT_NAME, answer)
-        reset_mk8dx()
         print(">[play_scenario]", answer, flush=True)
         return True
     elif mk8dx and author == "furaga" and question == "こんばんは":
@@ -349,10 +346,11 @@ def run_mk8dx_game_capture_thread():
                     if not is_finishing_:
                         mk8dx_spoken_summary = False
                     is_finishing_ = True
-                    prev_n_coin = 0
                     last_finished_time = time.time()
                 elif time.time() - last_finished_time > 15:
                     is_finishing_ = False
+                    # 終了しきったらコインも0枚にリセット
+                    prev_n_coin = 0
 
                 send_mk8dx_finished_to_OBS(is_finishing_)
                 if not ret:
@@ -488,7 +486,7 @@ def parse_mk8dx_screen(img):
     if omote[1] == "none" or ura[0] < 0.7:
         ura = [0, "none"]
     if place[0] < 0.7:
-        place = [0, "-1"]
+        place = [0, "--"]
 
     # OCR系は変な数値だったら無効
     if not (0 <= n_coin <= 10):
@@ -642,7 +640,7 @@ def init(args):
     is_mk8dx_mode_ = args.mk8dx
     if is_mk8dx_mode_:
         MK8DX.init(Path("data/mk8dx_images"))
-        reset_mk8dx()
+        reset_mk8dx(True)
 
     # monologue
     global all_monologues_
@@ -660,14 +658,16 @@ damage_voices = []
 tts_cache_ = {}
 
 
-def reset_mk8dx():
+def reset_mk8dx(reset_zimaku=False):
     global mk8dx_raw_status_history_, mk8dx_status_history_, mk8dx_status_updated_, is_finishing_
     with get_lock("mk8dx_history"):
         mk8dx_raw_status_history_ = []
         mk8dx_status_history_ = []
         mk8dx_status_updated_ = False
         # is_finishing_ = False
-    OBS.set_text("zundamon_zimaku", "")
+    if reset_zimaku:
+        OBS.set_text("zundamon_zimaku", "")
+
     send_mk8dx_status_to_OBS(0, 0, 0, [1, "--"], [1, "--"], [1, "--"])
     send_mk8dx_finished_to_OBS(False)
 

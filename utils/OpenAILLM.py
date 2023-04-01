@@ -90,7 +90,10 @@ def chat_completion_postprocess(content: str) -> str:
     content = content.strip(ignore_chars)
 
     # 文中の()や#をけす
-    content = remove_after(content, "()#")
+    content = remove_after(content, "()#（）「」")
+
+    # 語尾ミスったのを補正
+    content = content.replace("ののだ", "なのだ")
 
     return content
 
