@@ -521,7 +521,8 @@ def run_mk8dx_game_capture_thread():
                 game_state, cur_status, prev_n_coin, finish_time
             )
 
-            if mk8dx_game_state_ != "RACING":
+            # 確実にレース中のとき以外は黙らせる
+            if mk8dx_game_state_ != "RACING" or game_state !="RACING":
                 time.sleep(0.1)
                 continue
 
