@@ -16,6 +16,14 @@ def init(obs_pass):
     obs_ws_.connect()
 
 
+def set_browser_url(source_name: str, url: str):
+    obs_ws_.call(
+        obswebsocket.requests.SetSourceSettings(
+            sourceName=source_name, sourceSettings={"url": url}
+        )
+    )
+
+
 def set_text(source_name: str, new_text: str):
     obs_ws_.call(
         obswebsocket.requests.SetSourceSettings(
