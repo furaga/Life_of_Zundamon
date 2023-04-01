@@ -4,6 +4,7 @@ import openai
 import os
 import re
 import json
+import traceback
 from pathlib import Path
 
 prompt_path_ = None
@@ -38,8 +39,7 @@ def make_prompt(question, chat_history):
 
 
 def chat_completion(prompt: List, timeout: float) -> Tuple[bool, str]:
-    import traceback
-
+    # return True, "反射ずんだ餅がやばすぎるのだ"
     for _ in range(3):
         try:
             print(f"[chat_completion] start", flush=True)
