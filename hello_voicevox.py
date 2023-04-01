@@ -4,6 +4,27 @@ import json
 import simpleaudio
 import time
 
+
+def tts(text):
+    res1 = requests.post(
+        "http://127.0.0.1:50021/audio_query",
+        params={"text": text, "speaker": 3},
+    )
+    res2 = requests.post(
+        "http://127.0.0.1:50021/synthesis",
+        params={"speaker": 3},
+        data=json.dumps(res1.json()),
+    )
+
+    with open(f"tmp.wav", "wb") as f:
+        f.write(res2.content)
+        wav_obj = simpleaudio.WaveObject.from_wave_file(f"tmp.wav")
+#        wav_obj = simpleaudio.WaveObject.from_wave_file(r"C:\Users\furag\Downloads\001_ずんだもん（ノーマル）_反射ずんだ餅がやば….wav")
+        print(wav_obj)
+
+    return wav_obj
+
+
 # VOICEVOXをインストールしたPCのホスト名を指定してください
 HOSTNAME = "127.0.0.1" # "localhost"
 
@@ -31,38 +52,22 @@ for i, text in enumerate(texts):
         continue
 
     since = time.time()
-    # audio_query (音声合成用のクエリを作成するAPI)
-    res1 = requests.post(
-        "http://" + HOSTNAME + ":50021/audio_query",
-        headers = {'Content-Type': 'application/json'},
-        params={"text": text, "speaker": speaker},
-    )
+    wav = tts(text)
+    #wav2 = tts("痛い")
 
-    print("audio_query", time.time() - since)
-    since = time.time()
+    pb = None
+    import random
 
-    # synthesis (音声合成するAPI)
-    res2 = requests.post(
-        "http://" + HOSTNAME + ":50021/synthesis",
-        headers = {'Content-Type': 'application/json'},
-        params={"speaker": speaker},
-        data=json.dumps(res1.json()),
-    )
-    print("synthesis", time.time() - since)
-    since = time.time()
+    
+    for i in range(10000):
+        if pb is not None and pb.is_playing():
+            # if random.random() < 0.1:
+            #     pb.stop()
+            # time.sleep(0.1)
+            continue
 
-    # wavファイルに書き込み
-    out_path = output_path + "/" + filename + f"_{i:03d}.wav"
-    with open(out_path, mode="wb") as f:
-        f.write(res2.content)
-
-
-    print("save", time.time() - since)
-    since = time.time()
-
-    wav = simpleaudio.WaveObject.from_wave_file(out_path)
-    wav.play()
-#    simpleaudio.play_buffer(res2.content, 1, 2, 24000)
+        pb = wav.play() # simpleaudio.play_buffer(wav, 1, 2, 24000)
+        time.sleep(0.1)
 
     print("speak", time.time() - since)
     since = time.time()
