@@ -134,7 +134,6 @@ def play_scenario(author, question, mk8dx: bool):
         # リセットだけさせたい
         print(">[play_scenario] nf", flush=True)
         reset_mk8dx()
-        print(">[play_scenario]", answer, flush=True)
         return True
     elif (mk8dx and author == "furaga" and question == "まあまあ") or (
         mk8dx and is_finishing_
@@ -144,6 +143,7 @@ def play_scenario(author, question, mk8dx: bool):
             return False
 
         print(">[play_scenario] 感想", flush=True)
+        print("last_place:", latest_place_, flush=True)
         mk8dx_spoken_summary = True
 
         # OpenAI APIで回答生成
@@ -153,8 +153,8 @@ def play_scenario(author, question, mk8dx: bool):
             0,
             "",
             "",
-            "",
             latest_place_[1],
+            0,
             chat_history=[],
             is_race_mode=False,
         )
@@ -648,7 +648,7 @@ def init(args):
         for text in f:
             text = text.strip()
             damage_voices.append(text)
-            tts_cache_[text] = tts(text, 1.5, 1)
+            tts_cache_[text] = tts(text, 1.5)
 
 
 damage_voices = []
