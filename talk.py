@@ -69,16 +69,16 @@ def parse_args():
 
 # チャットへの回答を考える
 def think(author, question):
-    # ハードコード
-    if "初見" in question:
-        return random.choice(
-            [
-                "初見は帰るのだ",
-                "初見は帰れなのだ",
-                "初見は帰れ",
-                "帰れ",
-            ]
-        )
+    # # ハードコード
+    # if "初見" in question:
+    #     return random.choice(
+    #         [
+    #             "初見は帰るのだ",
+    #             "初見は帰れなのだ",
+    #             "初見は帰れ",
+    #             "帰れ",
+    #         ]
+    #     )
 
     with get_lock("talk_history"):
         history = talk_history_.copy()
@@ -349,6 +349,7 @@ def run_mk8dx_game_capture_thread():
                     if not is_finishing_:
                         mk8dx_spoken_summary = False
                     is_finishing_ = True
+                    prev_n_coin = 0
                     last_finished_time = time.time()
                 elif time.time() - last_finished_time > 15:
                     is_finishing_ = False
