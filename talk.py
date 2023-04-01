@@ -136,7 +136,7 @@ def play_scenario(author, question, mk8dx: bool):
         print(">[play_scenario] nf", flush=True)
         reset_mk8dx()
         return True
-    elif mk8dx and is_finishing_:
+    elif mk8dx_game_state_ == "FINISH":
         # ゴールの感想を言わせたい
         if mk8dx_spoken_result_:
             return False
@@ -286,10 +286,7 @@ play_obj_ = None
 
 def speak(text, wav):
     global play_obj_
-    #    if is_finishing_:
-    #       return
 
-    #    with get_lock("speak"):
     # OBSの字幕変更
     OBS.set_text("zundamon_zimaku", text)
 
@@ -321,7 +318,7 @@ def cancel_speak():
 # マリカの画面を解析して実況させる
 #
 
-is_finishing_ = False
+
 mk8dx_game_state_ = ""
 
 
@@ -477,7 +474,7 @@ def update_race_status(cur_status, prev_lap, lap_start_time):
 @fire_and_forget
 def run_mk8dx_game_capture_thread():
     global mk8dx_spoken_result_, mk8dx_game_state_
-    global app_done_, mk8dx_status_history_, mk8dx_status_updated_, is_finishing_
+    global app_done_, mk8dx_status_history_, mk8dx_status_updated_
 
     print("[run_mk8dx_game_capture_thread] Start")
     lap_start_time = time.time()
@@ -537,7 +534,7 @@ def run_mk8dx_think_tts_thread():
                         mk8dx_status_updated_ = False
 
                 # フィニッシュ画面は黙る
-                if is_finishing_:
+                if mk8dx_game_state_ == "RACING":
                     time.sleep(0.1)
                     continue
 
@@ -552,7 +549,7 @@ def run_mk8dx_think_tts_thread():
                 if len(answer) >= 1:
                     # 喋った内容を保存
                     f.write(
-                        f"{cur_status.place},{cur_status.omote},{cur_status.ura},{cur_status.n_lap},{cur_status.n_coin},{answer}\n"
+                        f"{cur_status.place},{cur_status.item_omote},{cur_status.item_ura},{cur_status.n_lap},{cur_status.n_coin},{answer}\n"
                     )
                     f.flush()
 
@@ -568,7 +565,7 @@ def run_mk8dx_think_tts_thread():
                     wav = tts(answer)
 
                     # 再生（非同期）
-                    if not is_finishing_:
+                    if mk8dx_game_state_ != "RACING":
                         request_speak(answer, wav, category)
 
                 print(
@@ -590,12 +587,8 @@ def send_mk8dx_status_to_OBS(n_coin, n_lap, lap_time, omote, ura, place):
     OBS.set_text("mk8dx_status", text)
 
 
-def send_mk8dx_game_state_to_OBS(is_finish_screen):
-    if is_finish_screen:
-        text = f"FINISHED"
-    else:
-        text = f""
-    OBS.set_text("mk8dx_status_finish", text)
+def send_mk8dx_game_state_to_OBS(game_state):
+    OBS.set_text("mk8dx_status_finish", game_state)
 
 
 #
@@ -710,11 +703,11 @@ tts_cache_ = {}
 
 
 def reset_mk8dx(reset_zimaku=False):
-    global mk8dx_status_history_, mk8dx_status_updated_, is_finishing_
+    global mk8dx_status_history_, mk8dx_status_updated_, mk8dx_game_state_
     with get_lock("mk8dx_history"):
         mk8dx_status_history_ = []
         mk8dx_status_updated_ = False
-        # is_finishing_ = False
+        mk8dx_game_state_ = ""
     if reset_zimaku:
         OBS.set_text("zundamon_zimaku", "")
         send_mk8dx_status_to_OBS(0, 0, 0, [1, "--"], [1, "--"], [1, "--"])
