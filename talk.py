@@ -325,7 +325,7 @@ is_finishing_ = False
 @fire_and_forget
 def run_mk8dx_game_capture_thread():
     print("[run_mk8dx_game_capture_thread] Start")
-    global request_stop_speak, mk8dx_spoken_summary
+    global mk8dx_spoken_summary
     global app_done_, mk8dx_status_history_, mk8dx_status_updated_, is_finishing_
     with open("mk8dx_chat_history.txt", "a", encoding="utf8") as f:
         prev_lap = -1
@@ -340,7 +340,8 @@ def run_mk8dx_game_capture_thread():
                 img = OBS.capture_game_screen()
                 ret, parse_result, is_finished = parse_mk8dx_screen(img)
 
-                # "FINISH"の文字が出たらしばらく何もしゃべらないモードにしたい
+                # "FINISH"の文字が出た
+                # しばらく何もしゃべらないモードにしたい
                 if is_finished:
                     cancel_speak()
                     if not is_finishing_:
@@ -352,6 +353,7 @@ def run_mk8dx_game_capture_thread():
                     # 終了しきったらコインも0枚にリセット
                     prev_n_coin = 0
 
+                # OBSにfinishしたことを伝える
                 send_mk8dx_finished_to_OBS(is_finishing_)
                 if not ret:
                     time.sleep(0.1)
@@ -359,31 +361,24 @@ def run_mk8dx_game_capture_thread():
 
                 n_coin, n_lap, omote, ura, place = parse_result
 
+                # 被弾判定
                 if prev_n_coin > n_coin:
-                    # リアクションボイスを即時再生
-                    answer, category = think_mk8dx(
-                        0,
-                        0,
-                        0,
-                        None,
-                        None,
-                        None,
-                        n_coin - prev_n_coin,
-                    )
-                    wav = tts(answer, 1.5)
-                    request_stop_speak = True
-                    request_speak(answer, wav, category)
-                    print("[request_reaction]", answer, category)
+                    mk8dx_reaction(n_coin, prev_n_coin)
+
                 prev_n_coin = n_coin
 
+                # ラップが変わった
                 if prev_lap != n_lap:
                     prev_lap = n_lap
                     lap_start_time = time.time()
                 lap_time = time.time() - lap_start_time
 
                 status = n_coin, n_lap, lap_time, omote, ura, place
+
+                # OBSにステータスを伝える
                 send_mk8dx_status_to_OBS(*status)
 
+                # ステータスを履歴に保存
                 with get_lock("mk8dx_status"):
                     mk8dx_status_history_.append(status)
                     if len(mk8dx_status_history_) > 2:
@@ -400,6 +395,24 @@ def run_mk8dx_game_capture_thread():
                 print(str(e), "\n", traceback.format_exc(), flush=True)
                 app_done_ = True
                 break
+
+
+def mk8dx_reaction(n_coin, prev_n_coin):
+    global request_stop_speak
+    # リアクションボイスを即時再生
+    answer, category = think_mk8dx(
+        0,
+        0,
+        0,
+        None,
+        None,
+        None,
+        n_coin - prev_n_coin,
+    )
+    wav = tts(answer, 1.5)
+    request_stop_speak = True
+    request_speak(answer, wav, category)
+    print("[request_reaction]", answer, category)
 
 
 @fire_and_forget
