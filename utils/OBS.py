@@ -32,7 +32,24 @@ def set_text(source_name: str, new_text: str):
     )
 
 
+all_img_paths = list(Path("record2").glob("*.jpg"))
+cur_img_index = 0
+
+
 def capture_game_screen(sourceName: str = "映像キャプチャデバイス") -> np.ndarray:
+    # global cur_img_index
+    #     img_path = all_img_paths[cur_img_index]
+    #     cur_img_index = (cur_img_index + 1) % len(all_img_paths)
+    #     img = cv2.imread(str(img_path))
+    #     cv2.imshow("img", cv2.resize(img, None, fx=0.5, fy=0.5))
+    #     if ord('q') == cv2.waitKey(1):
+    #         exit()
+
+    #  #   import time
+    # #    time.sleep(0.2)
+    #     return img
+
+    # out_path = Path(os.getcwd()) / f"record2/{cur_img_index:06d}.jpg"
     out_path = Path(os.getcwd()) / "__tmp__.jpg"
     obs_ws_.call(
         obswebsocket.requests.TakeSourceScreenshot(
@@ -42,4 +59,5 @@ def capture_game_screen(sourceName: str = "映像キャプチャデバイス") -
         )
     )
     img = cv2.imread(str(out_path))
+    #  cur_img_index += 1
     return img

@@ -151,7 +151,7 @@ def play_scenario(author, question, mk8dx: bool):
             0,
             "",
             "",
-            latest_place_[1],
+            latest_place_,
             0,
             chat_history=[],
             is_race_mode=False,
@@ -248,6 +248,7 @@ request_stop_speak = False
 def run_speak_thread():
     global request_stop_speak, play_obj_
     global app_done_
+    print("[run_speak_thread] Start")
     while not app_done_:
         try:
             if play_obj_ is not None and play_obj_.is_playing():
@@ -255,6 +256,7 @@ def run_speak_thread():
                     play_obj_.stop()
                     play_obj_ = None
                     request_stop_speak = False
+                    print("Stop speak")
                 else:
                     time.sleep(0.05)
                 continue
@@ -362,7 +364,9 @@ def parse_mk8dx_screen(img, cur_status: MK8DXStatus) -> Tuple[str, MK8DXStatus]:
         ret_lap = False
 
     # コイン・ラップが見えていたらレース中なはず
-    is_racing = ret_coin and ret_lap  # and place[1] != "-1"
+    is_racing = ret_coin and ret_lap  # and place[1] != "--"
+    # if is_racing:
+    #     print(ret_coin, ret_lap, place)
 
     # ゲーム状態
     game_state = ""
@@ -401,18 +405,31 @@ def parse_mk8dx_screen(img, cur_status: MK8DXStatus) -> Tuple[str, MK8DXStatus]:
     return game_state, new_status
 
 
+raw_game_state_history_ = []
+
+
 def update_game_state(game_state, cur_status, prev_n_coin, finish_time):
-    global mk8dx_spoken_result_
+    global mk8dx_spoken_result_, mk8dx_game_state_
+
+    raw_game_state_history_.append(game_state)
 
     prev_state = mk8dx_game_state_
 
-    if game_state == "FINISH":
+    if game_state == "RACING" and time.time() - finish_time > 15:
+        if len(raw_game_state_history_) >= 3:
+            import numpy as np
+
+            # 3F連続でRACINGならレース中とみなす
+            ok = np.all([s == game_state for s in raw_game_state_history_[-3:]])
+            if ok:
+                mk8dx_game_state_ = game_state
+    elif game_state == "FINISH":
         # FINISHは即時反映
         mk8dx_game_state_ = game_state
         finish_time = time.time()
-    elif time.time() - finish_time > 15:
-        # FINISHになって15秒経過したら更新許可
-        mk8dx_game_state_ = game_state
+    elif mk8dx_game_state_ == "FINISH" and time.time() - finish_time > 15:
+        # FINISHになって15秒経過したらリセット
+        mk8dx_game_state_ = ""
 
     is_state_changed = prev_state != mk8dx_game_state_
     if is_state_changed and mk8dx_game_state_ == "FINISH":
@@ -443,8 +460,8 @@ def mk8dx_reaction():
     print("[request_reaction]", answer, category)
 
 
-def update_race_status(cur_status, prev_lap, lap_start_time):
-    global mk8dx_status_updated_
+def update_race_status(cur_status, prev_n_coin, prev_lap, lap_start_time):
+    global mk8dx_status_updated_, mk8dx_status_history_
 
     # 被弾判定
     if prev_n_coin > cur_status.n_coin:
@@ -455,7 +472,15 @@ def update_race_status(cur_status, prev_lap, lap_start_time):
     if prev_lap != cur_status.n_lap:
         prev_lap = cur_status.n_lap
         lap_start_time = time.time()
-    cur_status.lap_time = time.time() - lap_start_time
+
+    cur_status = MK8DXStatus(
+        cur_status.n_coin,
+        cur_status.n_lap,
+        cur_status.item_omote,
+        cur_status.item_ura,
+        cur_status.place,
+        time.time() - lap_start_time,
+    )
 
     # OBSにステータスを伝える
     send_mk8dx_status_to_OBS(cur_status)
@@ -468,7 +493,7 @@ def update_race_status(cur_status, prev_lap, lap_start_time):
             mk8dx_status_history_ = mk8dx_status_history_[-2:]
         mk8dx_status_updated_ = True
 
-    return cur_status, prev_lap, lap_start_time
+    return cur_status, prev_n_coin, prev_lap, lap_start_time
 
 
 @fire_and_forget
@@ -501,8 +526,8 @@ def run_mk8dx_game_capture_thread():
                 continue
 
             # レース詳細の更新
-            cur_status, prev_lap, lap_start_time = update_race_status(
-                cur_status, prev_lap, lap_start_time
+            cur_status, prev_n_coin, prev_lap, lap_start_time = update_race_status(
+                cur_status, prev_n_coin, prev_lap, lap_start_time
             )
 
             print(
@@ -533,8 +558,8 @@ def run_mk8dx_think_tts_thread():
                             cur_status = mk8dx_status_history_[-1]
                         mk8dx_status_updated_ = False
 
-                # フィニッシュ画面は黙る
-                if mk8dx_game_state_ == "RACING":
+                # レース中以外はレースに関することはしゃべらない
+                if mk8dx_game_state_ != "RACING":
                     time.sleep(0.1)
                     continue
 
@@ -543,7 +568,8 @@ def run_mk8dx_think_tts_thread():
                     time.sleep(0.1)
                     continue
 
-                latest_place_ = cur_status.place
+                if cur_status.place != "--":
+                    latest_place_ = cur_status.place
                 answer, category = think_mk8dx(cur_status)
 
                 if len(answer) >= 1:
@@ -565,7 +591,7 @@ def run_mk8dx_think_tts_thread():
                     wav = tts(answer)
 
                     # 再生（非同期）
-                    if mk8dx_game_state_ != "RACING":
+                    if mk8dx_game_state_ == "RACING":
                         request_speak(answer, wav, category)
 
                 print(
@@ -579,11 +605,11 @@ def run_mk8dx_think_tts_thread():
                 break
 
 
-def send_mk8dx_status_to_OBS(n_coin, n_lap, lap_time, omote, ura, place):
-    text = f"順位: {place[1]}\n"
-    text += f"アイテム: {omote[1]}, {ura[1]}\n"
-    text += f"コイン: {n_coin}枚\n"
-    text += f"ラップ: {n_lap}週目 ({lap_time:.1f}秒)\n"
+def send_mk8dx_status_to_OBS(status):
+    text = f"順位: {status.place}\n"
+    text += f"アイテム: {status.item_omote}, {status.item_ura}\n"
+    text += f"コイン: {status.n_coin}枚\n"
+    text += f"ラップ: {status.n_lap}週目 ({status.lap_time:.1f}秒)\n"
     OBS.set_text("mk8dx_status", text)
 
 
@@ -710,8 +736,8 @@ def reset_mk8dx(reset_zimaku=False):
         mk8dx_game_state_ = ""
     if reset_zimaku:
         OBS.set_text("zundamon_zimaku", "")
-        send_mk8dx_status_to_OBS(0, 0, 0, [1, "--"], [1, "--"], [1, "--"])
-        send_mk8dx_game_state_to_OBS(False)
+    send_mk8dx_status_to_OBS(MK8DXStatus())
+    send_mk8dx_game_state_to_OBS(False)
 
 
 async def main(args) -> None:
