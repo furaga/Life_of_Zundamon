@@ -24,7 +24,7 @@ is_mk8dx_mode_ = False
 youtube_chat_ = None
 
 # voicevox
-speaker_ = 1  # ずんだもん
+speaker_ = 3  # ずんだもん
 
 #
 all_monologues_ = []
@@ -132,19 +132,28 @@ def think_monologues():
 
 # 決め打ちのセリフ・処理
 def play_scenario(author, question, mk8dx: bool):
+    print("[play_scenario]", author, question, mk8dx, flush=True)
     if mk8dx and author == "furaga" and question == "nf":
+        print(">[play_scenario] nf", flush=True)
         # ゴールの感想を述べさせる
-        _, answer = OpenAILLM.ask_mk8dx(
+
+        # OpenAI APIで回答生成
+        ret, answer = OpenAILLM.ask_mk8dx(
             0,
             0,
-            None,
-            None,
+            0,
+            "",
+            "",
+            "",
             latest_place_[1],
             chat_history=[],
-            race_mode=False,
+            is_race_mode=False,
         )
+        if not ret:
+            return False
         request_tts(BOT_NAME, answer)
         reset_mk8dx()
+        print(">[play_scenario]", answer, flush=True)
         return True
     elif mk8dx and author == "furaga" and question == "こんばんは":
         # 開始の挨拶
@@ -219,29 +228,42 @@ def request_tts(speaker_name, text):
         tts_queue_.append(text)
 
 
+request_stop_speak = False
+
+
 #
 # 音声再生
 #
 @fire_and_forget
 def run_speak_thread():
+    global request_stop_speak, play_obj_
     global app_done_
     while not app_done_:
         try:
-            # 通常
+            if play_obj_ is not None and play_obj_.is_playing():
+                if request_stop_speak:
+                    play_obj_.stop()
+                    play_obj_ = None
+                    request_stop_speak = False
+                else:
+                    time.sleep(0.05)
+                continue
+
             text, wav = "", None
             with get_lock("speak_queue"):
                 if len(speak_queue_) > 0:
                     text, wav, _ = speak_queue_.pop(0)
 
             if len(text) > 0:
+                print(f"[run_speak_thread] Start: {text}", flush=True)
                 since = time.time()
-                print(f"[run_speak_thread] Start: {text}")
                 speak(text, wav)
                 print(
-                    f"[run_speak_thread] Finish: {text} | elapsed {time.time() - since:.2f} sec"
+                    f"[run_speak_thread] Finish: {text} | elapsed {time.time() - since:.2f} sec",
+                    flush=True,
                 )
 
-            time.sleep(0.1)
+            time.sleep(0.05)
 
         except Exception as e:
             print(str(e), "\n", traceback.format_exc(), flush=True)
@@ -254,13 +276,15 @@ play_obj_ = None
 
 def speak(text, wav):
     global play_obj_
-    with get_lock("speak"):
-        # OBSの字幕変更
-        OBS.set_text("zundamon_zimaku", text)
+    if is_pause_speaking_:
+        return
 
-        # 音声再生
-        play_obj_ = simpleaudio.play_buffer(wav, 1, 2, 24000)
-        play_obj_.wait_done()
+    #    with get_lock("speak"):
+    # OBSの字幕変更
+    OBS.set_text("zundamon_zimaku", text)
+
+    # 音声再生
+    play_obj_ = simpleaudio.play_buffer(wav, 1, 2, 24000)
 
 
 def request_speak(text, wav, category="normal"):
@@ -272,26 +296,34 @@ def request_speak(text, wav, category="normal"):
             for i in range(len(speak_queue_) - 1, -1, -1):
                 if speak_queue_[i][2] == "mk8dx":
                     del speak_queue_[i]
-            speak_queue_.insert(0, (text, wav, category))
+            speak_queue_.append((text, wav, category))
         elif category == "mk8dx_reaction":
             speak_queue_.insert(0, (text, wav, category))
+        print("[request_speak] # of speak_queue_", len(speak_queue_))
+
+
+def cancel_speak():
+    with get_lock("speak_queue"):
+        speak_queue_.clear()
 
 
 #
 # マリカの画面を解析して実況させる
 #
 
-is_finished_screen_ = False
+is_pause_speaking_ = False
 
 
 @fire_and_forget
 def run_mk8dx_game_capture_thread():
     print("[run_mk8dx_game_capture_thread] Start")
-    global app_done_, mk8dx_status_history_, mk8dx_status_updated_, is_finished_screen_
+    global request_stop_speak
+    global app_done_, mk8dx_status_history_, mk8dx_status_updated_, is_pause_speaking_
     with open("mk8dx_chat_history.txt", "a", encoding="utf8") as f:
         prev_lap = -1
         lap_start_time = time.time()
         last_finished_time = 0
+        prev_n_coin = 0
         while not app_done_:
             try:
                 since = time.time()
@@ -302,17 +334,36 @@ def run_mk8dx_game_capture_thread():
 
                 # "FINISH"の文字が出たらしばらく何もしゃべらないモードにしたい
                 if is_finished:
-                    is_finished_screen_ = True
+                    cancel_speak()
+                    is_pause_speaking_ = True
                     last_finished_time = time.time()
                 elif time.time() - last_finished_time > 15:
-                    is_finished_screen_ = False
+                    is_pause_speaking_ = False
 
-                send_mk8dx_finished_to_OBS(is_finished_screen_)
+                send_mk8dx_finished_to_OBS(is_pause_speaking_)
                 if not ret:
                     time.sleep(0.1)
                     continue
 
                 n_coin, n_lap, omote, ura, place = parse_result
+
+                if prev_n_coin > n_coin:
+                    # リアクションボイスを即時再生
+                    answer, category = think_mk8dx(
+                        0,
+                        0,
+                        0,
+                        None,
+                        None,
+                        None,
+                        n_coin - prev_n_coin,
+                    )
+                    wav = tts(answer)
+                    request_stop_speak = True
+                    request_speak(answer, wav, category)
+                    print("[request_reaction]", answer, category)
+                prev_n_coin = n_coin
+
                 if prev_lap != n_lap:
                     prev_lap = n_lap
                     lap_start_time = time.time()
@@ -357,7 +408,7 @@ def run_mk8dx_think_tts_thread():
                         mk8dx_status_updated_ = False
 
                 # フィニッシュ画面は黙る
-                if is_finished_screen_:
+                if is_pause_speaking_:
                     time.sleep(0.1)
                     continue
 
@@ -367,14 +418,10 @@ def run_mk8dx_think_tts_thread():
                     continue
 
                 n_coin, n_lap, lap_time, omote, ura, place = cur_status
-                delta_coin = (
-                    cur_status[0] - prev_status[0] if prev_status is not None else 0
-                )
-                prev_status = cur_status
 
                 latest_place_ = place
                 answer, category = think_mk8dx(
-                    n_coin, n_lap, lap_time, omote, ura, place, delta_coin
+                    n_coin, n_lap, lap_time, omote, ura, place, 0
                 )
 
                 if len(answer) >= 1:
@@ -394,11 +441,7 @@ def run_mk8dx_think_tts_thread():
                     wav = tts(answer)
 
                     # 再生（非同期）
-                    if not is_finished_screen_:
-                        if category == "mk8dx_reaction":
-                            # リアクションは即音を鳴らしたい
-                            if play_obj_ is not None and play_obj_.is_playing():
-                                play_obj_.stop()
+                    if not is_pause_speaking_:
                         request_speak(answer, wav, category)
 
                 print(
@@ -566,7 +609,7 @@ def youtube_listen_chat():
 
 
 def init(args):
-    global youtube_chat_
+    global youtube_chat_, is_mk8dx_mode_
 
     # youtube
     youtube_chat_ = pytchat.create(video_id=args.chat_video_id)
@@ -578,8 +621,8 @@ def init(args):
     OBS.init(args.obs_pass)
 
     # mk8dx
-    mk8dx_ = args.mk8dx
-    if mk8dx_:
+    is_mk8dx_mode_ = args.mk8dx
+    if is_mk8dx_mode_:
         MK8DX.init(Path("data/mk8dx_images"))
         reset_mk8dx()
 
@@ -600,12 +643,12 @@ tts_cache_ = {}
 
 
 def reset_mk8dx():
-    global mk8dx_raw_status_history_, mk8dx_status_history_, mk8dx_status_updated_, is_finished_screen_
+    global mk8dx_raw_status_history_, mk8dx_status_history_, mk8dx_status_updated_, is_pause_speaking_
     with get_lock("mk8dx_history"):
         mk8dx_raw_status_history_ = []
         mk8dx_status_history_ = []
         mk8dx_status_updated_ = False
-        is_finished_screen_ = False
+        is_pause_speaking_ = False
     OBS.set_text("zundamon_zimaku", "")
     send_mk8dx_status_to_OBS(0, 0, 0, [1, "--"], [1, "--"], [1, "--"])
     send_mk8dx_finished_to_OBS(False)
@@ -619,7 +662,7 @@ async def main(args) -> None:
     run_chatbot_thread()
     run_tts_thread()
     run_speak_thread()
-    if args.mk8dx:
+    if is_mk8dx_mode_:
         run_mk8dx_game_capture_thread()
         run_mk8dx_think_tts_thread()
 
