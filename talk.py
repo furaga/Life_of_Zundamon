@@ -632,6 +632,10 @@ def init(args):
 
     # obs
     OBS.init(args.obs_pass)
+    OBS.set_browser_url(
+        "ブラウザ 2",
+        f"https://www.youtube.com/live_chat?is_popout=1&v={args.chat_video_id}",
+    )
 
     # mk8dx
     is_mk8dx_mode_ = args.mk8dx
