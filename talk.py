@@ -37,7 +37,7 @@ mk8dx_status_history_ = []
 mk8dx_status_updated_ = False
 mk8dx_spoken_result_ = False
 
-latest_place_ = [0, "1"]
+mk8dx_final_place_ = [0, "1"]
 
 during_tts_ = False
 
@@ -138,7 +138,7 @@ def play_scenario(author, question, mk8dx: bool):
         return True
     elif mk8dx_game_state_ == "FINISH":
         # ゴールの感想を言わせたい
-        if mk8dx_spoken_result_ and not mk8dx_detected_final_place_:
+        if mk8dx_spoken_result_ or not mk8dx_detected_final_place_:
             return False
 
         print(">[play_scenario] 感想", flush=True)
@@ -151,7 +151,7 @@ def play_scenario(author, question, mk8dx: bool):
             0,
             "",
             "",
-            latest_place_,
+            mk8dx_final_place_,
             0,
             chat_history=[],
             is_race_mode=False,
@@ -343,6 +343,7 @@ class MK8DXStatus(NamedTuple):
 def parse_mk8dx_screen(img, cur_status: MK8DXStatus) -> Tuple[str, MK8DXStatus]:
     global mk8dx_raw_history_
     global mk8dx_detected_final_place_
+    global mk8dx_final_place_
 
     # 画像解析
     ret_coin, n_coin = MK8DX.detect_coin(img)
@@ -415,6 +416,7 @@ def parse_mk8dx_screen(img, cur_status: MK8DXStatus) -> Tuple[str, MK8DXStatus]:
                 if r.place != new_status.place:
                     valid = False
             if valid:
+                mk8dx_final_place_ = cur_status.place
                 mk8dx_detected_final_place_ = True
     else:
         # FINISH状態でなければFalseにしておく
@@ -562,7 +564,7 @@ def run_mk8dx_game_capture_thread():
 
 @fire_and_forget
 def run_mk8dx_think_tts_thread():
-    global app_done_, latest_place_, mk8dx_status_updated_
+    global app_done_, mk8dx_status_updated_
     print("[run_mk8dx_think_tts_thread] Start")
     with open("mk8dx_chat_history.txt", "a", encoding="utf8") as f:
         prev_status = None
@@ -587,8 +589,6 @@ def run_mk8dx_think_tts_thread():
                     time.sleep(0.1)
                     continue
 
-                if cur_status.place != "--":
-                    latest_place_ = cur_status.place
                 answer, category = think_mk8dx(cur_status)
 
                 if len(answer) >= 1:
