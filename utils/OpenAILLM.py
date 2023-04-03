@@ -39,7 +39,7 @@ def make_prompt(question, chat_history):
 
 
 def chat_completion(prompt: List, timeout: float) -> Tuple[bool, str]:
-    # return True, "反射ずんだ餅がやばすぎるのだ"
+    #    return True, "ああ、ずんだ餅がやばいのだ"
     for _ in range(3):
         try:
             print(f"[chat_completion] start", flush=True)
@@ -84,16 +84,33 @@ def chat_completion_postprocess(content: str) -> str:
     # ずんだもん：XXXX の形式でかえってきたときの対応
     if content.startswith("ずんだもん:"):
         content = content[len("ずんだもん:") :]
+    if content.startswith("ずんだもん："):
+        content = content[len("ずんだもん：") :]
 
     # 文の先頭・末尾から余計な文字を消す
     ignore_chars = '<@.+>「」()#。"' + "'"
     content = content.strip(ignore_chars)
 
-    # 文中の()や#をけす
-    content = remove_after(content, "()#（）「」")
+    # 文中の#をけす
+    content = remove_after(content, "#＃")
+
+    # "(XX文字)" を消す
+    for ch in "(（":
+        pos = content.find(ch)
+        if pos >= 0:
+            after = content[pos:]
+            if "文字" in after:
+                content = content[:pos]
+
+    # 「」
+    # content = remove_after(content, "()#（）「」")
 
     # 語尾ミスったのを補正
     content = content.replace("ののだ", "なのだ")
+    content = content.replace("のだか？", "のだ？")
+
+    # あたらめて余計な文字消す
+    content = content.strip(ignore_chars)
 
     return content
 
