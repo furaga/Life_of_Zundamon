@@ -130,7 +130,7 @@ def think_monologues():
 
 # 決め打ちのセリフ・処理
 def play_scenario(author, question, mk8dx: bool):
-    global mk8dx_spoken_result_
+    global mk8dx_spoken_result_, mk8dx_detected_final_place_
     if mk8dx and author == "furaga" and question == "nf":
         # リセットだけさせたい
         print(">[play_scenario] nf", flush=True)
@@ -138,7 +138,7 @@ def play_scenario(author, question, mk8dx: bool):
         return True
     elif mk8dx_game_state_ == "FINISH":
         # ゴールの感想を言わせたい
-        if mk8dx_spoken_result_:
+        if mk8dx_spoken_result_ and not mk8dx_detected_final_place_:
             return False
 
         print(">[play_scenario] 感想", flush=True)
@@ -163,12 +163,16 @@ def play_scenario(author, question, mk8dx: bool):
         print(">[play_scenario]", answer, flush=True)
 
         return True
-    elif mk8dx and author == "furaga" and question == "こんばんは":
+    elif mk8dx and author == "furaga" and question == "こんにちは":
         # 開始の挨拶
-        request_tts(BOT_NAME, "ずんだもんなのだ。今日もマリオカートをやっていくのだ")
-        request_tts(BOT_NAME, "まだまだ上手ではないけれど、一生懸命プレイするのだ。みんなも楽しんでほしいのだ")
-        request_tts(BOT_NAME, "コメントもどんどんしてほしいのだ。よろしくなのだ")
-        request_tts(BOT_NAME, "さっそく始めるのだ")
+        request_tts(BOT_NAME, "皆さんこんにちは。ずんだもんなのだ。今日もマリオカートをやっていくのだ。")
+        request_tts(BOT_NAME, "たまに、「ゲーム画面はリアルタイムか？」と聞かれるのだけど、当然リアルタイムなのだ")
+        request_tts(
+            BOT_NAME, "もしきみがマリオカートを持っていて、レートが2万くらいあれば、タイミングを合わせて部屋に入ったら多分マッチングできるのだ"
+        )
+        request_tts(BOT_NAME, "また、ボクが初見に厳しいという指摘を受けたのだ。今日はもう少し優しくするのだ")
+        request_tts(BOT_NAME, "今日もコメントどんどんしてほしいのだ。よろしくなのだ")
+        request_tts(BOT_NAME, "それではさっそく始めるのだ")
         return True
     elif mk8dx and author == "furaga" and question == "そろそろ":
         # 終わりの挨拶
@@ -338,6 +342,7 @@ class MK8DXStatus(NamedTuple):
 
 def parse_mk8dx_screen(img, cur_status: MK8DXStatus) -> Tuple[str, MK8DXStatus]:
     global mk8dx_raw_history_
+    global mk8dx_detected_final_place_
 
     # 画像解析
     ret_coin, n_coin = MK8DX.detect_coin(img)
@@ -401,6 +406,19 @@ def parse_mk8dx_screen(img, cur_status: MK8DXStatus) -> Tuple[str, MK8DXStatus]:
         _update([r.item_ura for r in mk8dx_raw_history_], cur_status.item_ura),
         _update([r.place for r in mk8dx_raw_history_], cur_status.place),
     )
+
+    if mk8dx_game_state_ == "FINISH":
+        # FINISH状態で順位検出したらそれが最終順位
+        if place[1] != "--":
+            valid = True
+            for r in mk8dx_raw_history_:
+                if r.place != new_status.place:
+                    valid = False
+            if valid:
+                mk8dx_detected_final_place_ = True
+    else:
+        # FINISH状態でなければFalseにしておく
+        mk8dx_detected_final_place_ = False
 
     return game_state, new_status
 
@@ -522,7 +540,7 @@ def run_mk8dx_game_capture_thread():
             )
 
             # 確実にレース中のとき以外は黙らせる
-            if mk8dx_game_state_ != "RACING" or game_state !="RACING":
+            if mk8dx_game_state_ != "RACING" or game_state != "RACING":
                 time.sleep(0.1)
                 continue
 
@@ -680,7 +698,7 @@ def youtube_listen_chat():
         time.sleep(0.1)
         exit()
     # 40文字以内のコメントのみ取得（長文コメントは無視）
-    chats = [c for c in youtube_chat_.get().sync_items() if len(c.message) <= 40]
+    chats = [c for c in youtube_chat_.get().sync_items()]  #  if len(c.message) <= 40]
     if len(chats) <= 0:
         return False, "", ""
     return True, chats[-1].author.name, chats[-1].message
