@@ -53,13 +53,29 @@ def imwrite_safe(filename, img, params=None):
 # #    cv2.waitKey(0)
 
 
-for img_path in list(Path("data/mk8dx_images/finish").glob("*.png")):
-    input = imread_safe(str(img_path))
-    print(img_path)
-    print(input.shape)
-    output = remove(input)
-    out_path = "data/mk8dx_images/finish_rembg/" + img_path.name
+# for type in ["表", "裏"]:
+#     for img_path in list(Path(f"data/mk8dx_images/items/{type}").glob("*.jpg")):
+#         input = imread_safe(str(img_path))
+#         print(img_path)
+#         print(input.shape)
+#         output = remove(input)
+#         out_path = "data/mk8dx_images/items/" + type + "_mask/" + img_path.stem + ".png"
+#         Path(out_path).parent.mkdir(exist_ok=True, parents=True)
+#         print("Output:", out_path)
+#         mask = output[:, :, 3]
+#         mask = cv2.threshold(mask, 128, 255, cv2.THRESH_BINARY)[1]
+#         imwrite_safe(str(out_path), mask)
+#     #    cv2.imshow("img", output)
+#     #    cv2.waitKey(0)
+
+
+for img_path in list(Path(f"data/mk8dx_images/items").glob("*.png")):
+    input = imread_safe(str(img_path), cv2.IMREAD_UNCHANGED)
+    out_path = "data/mk8dx_images/items/mask/" + img_path.stem + ".png"
+    Path(out_path).parent.mkdir(exist_ok=True, parents=True)
     print("Output:", out_path)
-    imwrite_safe(str(out_path), output)
+    mask = input[:, :, 3]
+    mask = cv2.threshold(mask, 128, 255, cv2.THRESH_BINARY)[1]
+    imwrite_safe(str(out_path), mask)
 #    cv2.imshow("img", output)
 #    cv2.waitKey(0)
