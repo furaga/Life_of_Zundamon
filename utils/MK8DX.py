@@ -66,9 +66,9 @@ def load_item_images(item_dir: Path):
             rgb = img[
                 :, :, :3
             ]  # cv2.bitwise_and(img[:, :, :3], img[:, :, :3], mask=mask)
-            feat = get_clip_features(rgb)
-            feat /= np.linalg.norm(feat)
-            item_dict[img_path.stem] = feat
+            # feat = get_clip_features(rgb)
+            # feat /= np.linalg.norm(feat)
+            item_dict[img_path.stem] = rgb
 
     print("Loaded", len(omote_item_dict_), "omote item images.")
     print("Loaded", len(ura_item_dict_), "ura item images.")
@@ -137,16 +137,16 @@ def detect_items(img):
     omote_ls = []
     ura_ls = []
 
-    for name, ref_feat in omote_item_dict_.items():
+    for name, tmpl in omote_item_dict_.items():
         name = name.split("_")[0]
-        omote_score = match(omote_feat, ref_feat)
-        omote_score = adhoc_correction(omote_score, name)
+        result = cv2.matchTemplate(omote, tmpl, cv2.TM_CCORR_NORMED)
+        _, omote_score, _, _ = cv2.minMaxLoc(result)
         omote_ls.append([omote_score, name])
 
-    for name, ref_feat in ura_item_dict_.items():
+    for name, tmpl in ura_item_dict_.items():
         name = name.split("_")[0]
-        ura_score = match(ura_feat, ref_feat)
-        ura_score = adhoc_correction(ura_score, name)
+        result = cv2.matchTemplate(ura, tmpl, cv2.TM_CCORR_NORMED)
+        _, ura_score, _, _ = cv2.minMaxLoc(result)
         ura_ls.append([ura_score, name])
 
     omote_ls = sorted(omote_ls)
@@ -273,7 +273,7 @@ def crop_and_save_items():
         # imwrite_safe("裏/" + img_path.stem + ".jpg", ura)
 
 
-#crop_and_save_items()
+# crop_and_save_items()
 
 if __name__ == "__main__":
 
@@ -310,7 +310,7 @@ if __name__ == "__main__":
             # 大きくて画面に入らないので小さく
             img_resize = cv2.resize(img, None, fx=0.5, fy=0.5)
             cv2.imshow("screenshot", img_resize)
-            if ord("q") == cv2.waitKey(0 if ret[0][0] > 0.8 else 1):
+            if ord("q") == cv2.waitKey(0 if ret[0][0] > 0.9 else 1):
                 break
 
     main()
