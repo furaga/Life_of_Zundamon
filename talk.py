@@ -218,6 +218,10 @@ def tts(text, speed=1.1, speaker=3):
         return tts_cache_[text]
 
     with get_lock("tts"):
+        text = text.replace("焦", "あせ")
+        text = text.replace("緑3", "みどさん")
+        text = text.replace("緑３", "みどさん")
+
         res1 = requests.post(
             "http://127.0.0.1:50021/audio_query",
             params={"text": text, "speaker": speaker},
