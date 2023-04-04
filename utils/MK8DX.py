@@ -227,6 +227,47 @@ def detect_lap(img):
     return detect_number(img[y1:y2, x1:x2], False)
 
 
+
+def imwrite_safe(filename, img, params=None):
+    try:
+        ext = os.path.splitext(filename)[1]
+        result, n = cv2.imencode(ext, img, params)
+
+        if result:
+            with open(filename, mode="w+b") as f:
+                n.tofile(f)
+            return True
+        else:
+            return False
+    except Exception as e:
+        print(e)
+        return False
+
+
+def crop_and_save_items():
+    all_img_paths = Path("../data/mk8dx_images/items_capture").glob("表/*.png")
+    for img_path in all_img_paths:
+        img = imread_safe(str(img_path))
+
+        h, w = img.shape[:2]
+        
+        margin = 10
+        x1 = int((113 - margin) / 1280 * w)
+        x2 = int((215 + margin) / 1280 * w)
+        y1 = int((65 - margin) / 720 * h)
+        y2 = int((167 + margin) / 720 * h)
+        omote = img[y1:y2, x1:x2]
+        imwrite_safe("表/" + img_path.stem + ".jpg", omote)
+
+        # x1 = int(48 / 1280 * w)
+        # x2 = int(112 / 1280 * w)
+        # y1 = int(38 / 720 * h)
+        # y2 = int(102 / 720 * h)
+        # ura = img[y1:y2, x1:x2]
+        # imwrite_safe("裏/" + img_path.stem + ".jpg", ura)
+
+crop_and_save_items()
+
 if __name__ == "__main__":
 
     def main() -> None:
@@ -265,4 +306,4 @@ if __name__ == "__main__":
             if ord("q") == cv2.waitKey(0 if ret[0] > 0.95 else 1):
                 break
 
-    main()
+    # main()
