@@ -61,14 +61,23 @@ def load_item_images(item_dir: Path):
     for type, item_dict in [("表", omote_item_dict_), ("裏", ura_item_dict_)]:
         all_img_paths = list(item_dir.glob(f"{type}/*.jpg"))
         for img_path in all_img_paths:
-            img = imread_safe(str(img_path), cv2.IMREAD_UNCHANGED)
-            img = cv2.resize(img, (ITEM_IMAGE_SIZE, ITEM_IMAGE_SIZE))
-            rgb = img[
-                :, :, :3
-            ]  # cv2.bitwise_and(img[:, :, :3], img[:, :, :3], mask=mask)
-            # feat = get_clip_features(rgb)
-            # feat /= np.linalg.norm(feat)
-            item_dict[img_path.stem] = rgb
+            img = imread_safe(str(img_path))
+            # img = cv2.resize(img, (ITEM_IMAGE_SIZE, ITEM_IMAGE_SIZE))
+
+            mask_path = item_dir / "mask" / (img_path.stem + ".png")
+            if mask_path.exists():
+                mask = imread_safe(str(mask_path), cv2.IMREAD_GRAYSCALE).astype(
+                    np.uint8
+                )
+            else:
+                mask = np.zeros(img.shape[:2], np.uint8)
+                mask.fill(255)
+
+            if type == "裏":
+                mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
+
+            rgb = cv2.bitwise_and(img, img, mask=mask)
+            item_dict[img_path.stem] = rgb, mask
 
     print("Loaded", len(omote_item_dict_), "omote item images.")
     print("Loaded", len(ura_item_dict_), "ura item images.")
@@ -112,10 +121,11 @@ def match(img_feat, ref_feat):
 
 def detect_items(img):
     h, w = img.shape[:2]
-    x1 = int(113 / 1280 * w)
-    x2 = int(215 / 1280 * w)
-    y1 = int(65 / 720 * h)
-    y2 = int(167 / 720 * h)
+    margin = 10
+    x1 = int((113 - margin) / 1280 * w)
+    x2 = int((215 + margin) / 1280 * w)
+    y1 = int((65 - margin) / 720 * h)
+    y2 = int((167 + margin) / 720 * h)
     omote = img[y1:y2, x1:x2]
     omote_feat = get_clip_features(omote)
     omote_feat /= np.linalg.norm(omote_feat)
@@ -137,15 +147,21 @@ def detect_items(img):
     omote_ls = []
     ura_ls = []
 
-    for name, tmpl in omote_item_dict_.items():
+    for name, (tmpl, mask) in omote_item_dict_.items():
         name = name.split("_")[0]
-        result = cv2.matchTemplate(omote, tmpl, cv2.TM_CCORR_NORMED)
+        if name == "ゲッソー" or name == "テレサ":
+            continue
+        t = cv2.bitwise_and(omote, omote, mask=mask)
+        result = cv2.matchTemplate(t, tmpl, cv2.TM_CCORR_NORMED)
         _, omote_score, _, _ = cv2.minMaxLoc(result)
         omote_ls.append([omote_score, name])
 
-    for name, tmpl in ura_item_dict_.items():
+    for name, (tmpl, mask) in ura_item_dict_.items():
         name = name.split("_")[0]
-        result = cv2.matchTemplate(ura, tmpl, cv2.TM_CCORR_NORMED)
+        if name == "ゲッソー" or name == "テレサ":
+            continue
+        t = cv2.bitwise_and(ura, ura, mask=mask)
+        result = cv2.matchTemplate(t, tmpl, cv2.TM_CCORR_NORMED)
         _, ura_score, _, _ = cv2.minMaxLoc(result)
         ura_ls.append([ura_score, name])
 
@@ -310,7 +326,7 @@ if __name__ == "__main__":
             # 大きくて画面に入らないので小さく
             img_resize = cv2.resize(img, None, fx=0.5, fy=0.5)
             cv2.imshow("screenshot", img_resize)
-            if ord("q") == cv2.waitKey(0 if ret[0][0] > 0.9 else 1):
+            if ord("q") == cv2.waitKey(0 if ret[0][0] > 0.95 else 1):
                 break
 
     main()
