@@ -15,7 +15,7 @@ prev_time = time.time()
 while True:
     now = datetime.now()
     out_path = Path(
-        f"C:/Users/furag/Documents/prog/python/Life_of_Zundamon/record/{now.strftime('%Y-%m-%dT%H-%M-%S.png')}"
+        f"C:/Users/furag/Documents/prog/python/Life_of_Zundamon/record_items/{now.strftime('%Y-%m-%dT%H-%M-%S.png')}"
     )
     print(out_path)
     since = time.time()

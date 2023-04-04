@@ -163,18 +163,19 @@ def play_scenario(author, question, mk8dx: bool):
         print(">[play_scenario]", answer, flush=True)
 
         return True
-    elif mk8dx and author == "furaga" and question == "こんにちは":
+    elif mk8dx and author == "furaga" and question == "おはこんはろちゃお":
         # 開始の挨拶
-        request_tts(BOT_NAME, "皆さんこんにちは。ずんだもんなのだ。今日もマリオカートをやっていくのだ。")
-        request_tts(BOT_NAME, "たまに、「ゲーム画面はリアルタイムか？」と聞かれるのだけど、当然リアルタイムなのだ")
+        request_tts(BOT_NAME, "ずんだもんなのだ。今日も今日とてマリオカートをやっていくのだ。")
+        request_tts(BOT_NAME, "昨日の配信でも話したのだけど、ゲーム画面もリアルタイムなのだ")
         request_tts(
             BOT_NAME, "もしきみがマリオカートを持っていて、レートが2万くらいあれば、タイミングを合わせて部屋に入ったら多分マッチングできるのだ"
         )
-        request_tts(BOT_NAME, "また、ボクが初見に厳しいという指摘を受けたのだ。今日はもう少し優しくするのだ")
         request_tts(BOT_NAME, "今日もコメントどんどんしてほしいのだ。よろしくなのだ")
-        request_tts(BOT_NAME, "それではさっそく始めるのだ")
+        request_tts(BOT_NAME, "今日は事前にウォーミングアップができていないのだ")
+        request_tts(BOT_NAME, "いつも以上にミスが多くなるかもしれないけれど、大目に見てほしいのだ")
+        request_tts(BOT_NAME, "それでは始めるのだ。がんばるのだ！")
         return True
-    elif mk8dx and author == "furaga" and question == "そろそろ":
+    elif mk8dx and author == "furaga" and question == "終わりですか":
         # 終わりの挨拶
         request_tts(BOT_NAME, "今日はこのへんで終わりにするのだ。楽しかったのだ")
         request_tts(BOT_NAME, "見てくれたみんなもありがとうなのだ")
@@ -416,7 +417,7 @@ def parse_mk8dx_screen(img, cur_status: MK8DXStatus) -> Tuple[str, MK8DXStatus]:
                 if r.place != new_status.place:
                     valid = False
             if valid:
-                mk8dx_final_place_ = cur_status.place
+                mk8dx_final_place_ = new_status.place
                 mk8dx_detected_final_place_ = True
     else:
         # FINISH状態でなければFalseにしておく
