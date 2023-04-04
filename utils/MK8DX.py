@@ -61,11 +61,26 @@ def load_item_images(item_dir: Path):
     for type, item_dict in [("表", omote_item_dict_), ("裏", ura_item_dict_)]:
         all_img_paths = list(item_dir.glob(f"{type}/*.jpg"))
         for img_path in all_img_paths:
-            img = imread_safe(str(img_path), cv2.IMREAD_UNCHANGED)
-            img = cv2.resize(img, (ITEM_IMAGE_SIZE, ITEM_IMAGE_SIZE))
-            rgb = img[
-                :, :, :3
-            ]  # cv2.bitwise_and(img[:, :, :3], img[:, :, :3], mask=mask)
+            img = imread_safe(str(img_path))
+            #            img = cv2.resize(img, (ITEM_IMAGE_SIZE, ITEM_IMAGE_SIZE))
+
+            mask_path = item_dir / "mask" / (img_path.stem.split('_')[0] + ".png")
+            if mask_path.exists():
+                mask = imread_safe(str(mask_path), cv2.IMREAD_GRAYSCALE).astype(
+                    np.uint8
+                )
+            else:
+                mask = np.zeros(img.shape[:2], np.uint8)
+                mask.fill(255)
+
+            if type == "裏":
+                mask = cv2.resize(mask, (img.shape[1], img.shape[0]))
+
+            # マスクする
+            rgb = cv2.bitwise_and(img, img, mask=mask)
+            # cv2.imshow("rgb", rgb)
+            # cv2.waitKey(0)
+
             feat = get_clip_features(rgb)
             feat /= np.linalg.norm(feat)
             item_dict[img_path.stem] = feat
@@ -273,7 +288,7 @@ def crop_and_save_items():
         # imwrite_safe("裏/" + img_path.stem + ".jpg", ura)
 
 
-#crop_and_save_items()
+# crop_and_save_items()
 
 if __name__ == "__main__":
 
@@ -310,7 +325,7 @@ if __name__ == "__main__":
             # 大きくて画面に入らないので小さく
             img_resize = cv2.resize(img, None, fx=0.5, fy=0.5)
             cv2.imshow("screenshot", img_resize)
-            if ord("q") == cv2.waitKey(0 if ret[0][0] > 0.8 else 1):
+            if ord("q") == cv2.waitKey(0 if ret[0][0] > 0.81 else 1):
                 break
 
     main()
