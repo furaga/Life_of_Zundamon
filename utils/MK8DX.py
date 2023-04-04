@@ -15,7 +15,8 @@ else:
     from . import digit_ocr
 
 
-item_dict_ = {}
+omote_item_dict_ = {}
+ura_item_dict_ = {}
 place_dict_ = {}
 center_dict_ = {}
 
@@ -57,17 +58,20 @@ def get_clip_features(img):
 
 
 def load_item_images(item_dir: Path):
-    all_img_paths = list(item_dir.glob("*.webp"))
-    all_img_paths += list(item_dir.glob("*.png"))
-    for img_path in all_img_paths:
-        img = imread_safe(str(img_path), cv2.IMREAD_UNCHANGED)
-        img = cv2.resize(img, (ITEM_IMAGE_SIZE, ITEM_IMAGE_SIZE))
-        rgb = img[:, :, :3]  # cv2.bitwise_and(img[:, :, :3], img[:, :, :3], mask=mask)
-        feat = get_clip_features(rgb)
-        feat /= np.linalg.norm(feat)
-        item_dict_[img_path.stem] = feat
+    for type, item_dict in [("表", omote_item_dict_), ("裏", ura_item_dict_)]:
+        all_img_paths = list(item_dir.glob(f"{type}/*.jpg"))
+        for img_path in all_img_paths:
+            img = imread_safe(str(img_path), cv2.IMREAD_UNCHANGED)
+            img = cv2.resize(img, (ITEM_IMAGE_SIZE, ITEM_IMAGE_SIZE))
+            rgb = img[
+                :, :, :3
+            ]  # cv2.bitwise_and(img[:, :, :3], img[:, :, :3], mask=mask)
+            feat = get_clip_features(rgb)
+            feat /= np.linalg.norm(feat)
+            item_dict[img_path.stem] = feat
 
-    print("Loaded", len(item_dict_), "item images.")
+    print("Loaded", len(omote_item_dict_), "omote item images.")
+    print("Loaded", len(ura_item_dict_), "ura item images.")
 
 
 def load_place_images(place_dir: Path):
@@ -132,12 +136,15 @@ def detect_items(img):
 
     omote_ls = []
     ura_ls = []
-    for name, ref_feat in item_dict_.items():
+
+    for name, ref_feat in omote_item_dict_.items():
         name = name.split("_")[0]
         omote_score = match(omote_feat, ref_feat)
         omote_score = adhoc_correction(omote_score, name)
         omote_ls.append([omote_score, name])
 
+    for name, ref_feat in ura_item_dict_.items():
+        name = name.split("_")[0]
         ura_score = match(ura_feat, ref_feat)
         ura_score = adhoc_correction(ura_score, name)
         ura_ls.append([ura_score, name])
@@ -227,7 +234,6 @@ def detect_lap(img):
     return detect_number(img[y1:y2, x1:x2], False)
 
 
-
 def imwrite_safe(filename, img, params=None):
     try:
         ext = os.path.splitext(filename)[1]
@@ -250,7 +256,7 @@ def crop_and_save_items():
         img = imread_safe(str(img_path))
 
         h, w = img.shape[:2]
-        
+
         margin = 10
         x1 = int((113 - margin) / 1280 * w)
         x2 = int((215 + margin) / 1280 * w)
@@ -266,7 +272,8 @@ def crop_and_save_items():
         # ura = img[y1:y2, x1:x2]
         # imwrite_safe("裏/" + img_path.stem + ".jpg", ura)
 
-crop_and_save_items()
+
+#crop_and_save_items()
 
 if __name__ == "__main__":
 
@@ -279,15 +286,15 @@ if __name__ == "__main__":
             #    continue
             img = cv2.imread(str(img_path))
 
-            since = time.time()
-            ret = detect_finish(img)
-            print(ret)
-            print(f"({i})[detect_finish] Elapsed {time.time() - since:.2f} sec")
-
             # since = time.time()
-            # ret = detect_items(img)
+            # ret = detect_finish(img)
             # print(ret)
-            # print(f"({i})[detect_items] Elapsed {time.time() - since:.2f} sec")
+            # print(f"({i})[detect_finish] Elapsed {time.time() - since:.2f} sec")
+
+            since = time.time()
+            ret = detect_items(img)
+            print(ret)
+            print(f"({i})[detect_items] Elapsed {time.time() - since:.2f} sec")
 
             # since = time.time()
             # ret = detect_place(img)
@@ -301,9 +308,9 @@ if __name__ == "__main__":
             # print(f"({i})[detect coin/lap] Elapsed {time.time() - since:.2f} sec")
 
             # 大きくて画面に入らないので小さく
-            img_resize = cv2.resize(img, None, fx=0.7, fy=0.7)
+            img_resize = cv2.resize(img, None, fx=0.5, fy=0.5)
             cv2.imshow("screenshot", img_resize)
-            if ord("q") == cv2.waitKey(0 if ret[0] > 0.95 else 1):
+            if ord("q") == cv2.waitKey(0 if ret[0][0] > 0.8 else 1):
                 break
 
-    # main()
+    main()
