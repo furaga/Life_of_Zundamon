@@ -64,7 +64,7 @@ def load_item_images(item_dir: Path):
             img = imread_safe(str(img_path))
             #            img = cv2.resize(img, (ITEM_IMAGE_SIZE, ITEM_IMAGE_SIZE))
 
-            mask_path = item_dir / "mask" / (img_path.stem.split('_')[0] + ".png")
+            mask_path = item_dir / "mask" / (img_path.stem.split("_")[0] + ".png")
             if mask_path.exists():
                 mask = imread_safe(str(mask_path), cv2.IMREAD_GRAYSCALE).astype(
                     np.uint8
@@ -153,13 +153,13 @@ def detect_items(img):
     ura_ls = []
 
     for name, ref_feat in omote_item_dict_.items():
-        name = name.split("_")[0]
+        name = name.split("_")[0].replace("2", "3")  # 例: バナ2→バナ3
         omote_score = match(omote_feat, ref_feat)
         omote_score = adhoc_correction(omote_score, name)
         omote_ls.append([omote_score, name])
 
     for name, ref_feat in ura_item_dict_.items():
-        name = name.split("_")[0]
+        name = name.split("_")[0].replace("2", "3")  # 例: バナ2→バナ3
         ura_score = match(ura_feat, ref_feat)
         ura_score = adhoc_correction(ura_score, name)
         ura_ls.append([ura_score, name])
