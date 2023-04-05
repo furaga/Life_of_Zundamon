@@ -326,6 +326,56 @@ def cancel_speak():
 
 
 #
+# 立ち絵制御
+#
+@fire_and_forget
+def run_tachie_thread():
+    global app_done_
+    import cv2
+
+    print("[run_tachie_thread] Start")
+
+    def crop(img):
+        # extract non-black area
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        _, thresh = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
+        contours, _ = cv2.findContours(
+            thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        x, y, w, h = cv2.boundingRect(contours[0])
+        return img[y : y + h, x : x + w]
+
+    image_dict = {
+        "oo": crop(cv2.imread("data/character/oo.png")),
+        "o-": crop(cv2.imread("data/character/o-.png")),
+        "-o": crop(cv2.imread("data/character/-o.png")),
+        "--": crop(cv2.imread("data/character/--.png")),
+    }
+
+    while not app_done_:
+        try:
+            eye_open = random.random() < 0.99
+
+            # 音声再生中は適当に口パク
+            if play_obj_ is not None and play_obj_.is_playing():
+                mouse_open = random.random() < 0.5
+            else:
+                mouse_open = False
+
+            key = ""
+            key += "o" if eye_open else "-"
+            key += "o" if mouse_open else "-"
+
+            cv2.imshow("img.jpg", image_dict[key])
+            cv2.waitKey(33)
+
+        except Exception as e:
+            print(str(e), "\n", traceback.format_exc(), flush=True)
+            app_done_ = True
+            break
+
+
+#
 # マリカの画面を解析して実況させる
 #
 
@@ -772,6 +822,7 @@ async def main(args) -> None:
     run_chatbot_thread()
     run_tts_thread()
     run_speak_thread()
+    run_tachie_thread()
     if is_mk8dx_mode_:
         run_mk8dx_game_capture_thread()
         run_mk8dx_think_tts_thread()
