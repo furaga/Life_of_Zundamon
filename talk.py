@@ -335,7 +335,7 @@ def run_tachie_thread():
 
     print("[run_tachie_thread] Start")
 
-    def crop(img):
+    def crop(img, margin=31):
         # extract non-black area
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         _, thresh = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
@@ -343,8 +343,13 @@ def run_tachie_thread():
             thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
         x, y, w, h = cv2.boundingRect(contours[0])
-        return img[y : y + h, x : x + w]
 
+        new_img = np.zeros((h + margin * 2, w + margin * 2, 3), np.uint8)
+        new_img[margin:margin+h, margin:margin+w] = img[y : y + h, x : x + w]
+
+        return new_img
+
+    import numpy as np
     image_dict = {
         "oo": crop(cv2.imread("data/character/oo.png")),
         "o-": crop(cv2.imread("data/character/o-.png")),
@@ -354,6 +359,8 @@ def run_tachie_thread():
 
     while not app_done_:
         try:
+
+
             eye_open = random.random() < 0.99
 
             # 音声再生中は適当に口パク
@@ -366,7 +373,15 @@ def run_tachie_thread():
             key += "o" if eye_open else "-"
             key += "o" if mouse_open else "-"
 
-            cv2.imshow("img.jpg", image_dict[key])
+            t = time.time() * np.pi * 2 * 0.2
+            crop_px = int(15 * (1 + np.sin(t)) / 2)
+
+            h, w = image_dict[key].shape[:2]
+            show_img = cv2.resize(
+                image_dict[key][crop_px:h-crop_px, :],
+                (w, h)
+            )
+            cv2.imshow("zundamon tachie", show_img)
             cv2.waitKey(33)
 
         except Exception as e:
