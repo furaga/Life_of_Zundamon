@@ -169,7 +169,12 @@ def detect_items(img):
     # print("[omote]", omote_ls[-2:])
     # print("[ura  ]",ura_ls[-2:])
 
-    return omote_ls[-1], ura_ls[-1]
+    res_omote = omote_ls[-1]
+    res_ura = ura_ls[-1]
+
+    # TODO: 緑と緑を間違えやすいので、緑甲羅と判別されたら色を確認する
+
+    return res_omote, res_ura
 
 
 # 現在の順位

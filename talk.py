@@ -345,11 +345,12 @@ def run_tachie_thread():
         x, y, w, h = cv2.boundingRect(contours[0])
 
         new_img = np.zeros((h + margin * 2, w + margin * 2, 3), np.uint8)
-        new_img[margin:margin+h, margin:margin+w] = img[y : y + h, x : x + w]
+        new_img[margin : margin + h, margin : margin + w] = img[y : y + h, x : x + w]
 
         return new_img
 
     import numpy as np
+
     image_dict = {
         "oo": crop(cv2.imread("data/character/oo.png")),
         "o-": crop(cv2.imread("data/character/o-.png")),
@@ -357,17 +358,20 @@ def run_tachie_thread():
         "--": crop(cv2.imread("data/character/--.png")),
     }
 
+    cnt = 0
+    mouse_open = "-"
     while not app_done_:
         try:
-
+            cnt += 1
 
             eye_open = random.random() < 0.99
 
             # 音声再生中は適当に口パク
-            if play_obj_ is not None and play_obj_.is_playing():
-                mouse_open = random.random() < 0.5
-            else:
-                mouse_open = False
+            if cnt % 3 == 0:
+                if play_obj_ is not None and play_obj_.is_playing():
+                    mouse_open = random.random() < 0.5
+                else:
+                    mouse_open = False
 
             key = ""
             key += "o" if eye_open else "-"
@@ -377,12 +381,9 @@ def run_tachie_thread():
             crop_px = int(15 * (1 + np.sin(t)) / 2)
 
             h, w = image_dict[key].shape[:2]
-            show_img = cv2.resize(
-                image_dict[key][crop_px:h-crop_px, :],
-                (w, h)
-            )
+            show_img = cv2.resize(image_dict[key][crop_px : h - crop_px, :], (w, h))
             cv2.imshow("zundamon tachie", show_img)
-            cv2.waitKey(33)
+            cv2.waitKey(16)
 
         except Exception as e:
             print(str(e), "\n", traceback.format_exc(), flush=True)
@@ -662,11 +663,11 @@ def run_mk8dx_think_tts_thread():
                 answer, category = think_mk8dx(cur_status)
 
                 if len(answer) >= 1:
-                    # 喋った内容を保存
-                    f.write(
-                        f"{cur_status.place},{cur_status.item_omote},{cur_status.item_ura},{cur_status.n_lap},{cur_status.n_coin},{answer}\n"
-                    )
-                    f.flush()
+                    # # 喋った内容を保存
+                    # f.write(
+                    #     f"{cur_status.place},{cur_status.item_omote},{cur_status.item_ura},{cur_status.n_lap},{cur_status.n_coin},{answer}\n"
+                    # )
+                    # f.flush()
 
                     # tts（時間に余裕があるので同期）
                     global talk_history_
