@@ -163,24 +163,24 @@ def play_scenario(author, question, mk8dx: bool):
         print(">[play_scenario]", answer, flush=True)
 
         return True
-    elif mk8dx and author == "furaga" and question == "おはこんはろちゃお":
+    elif mk8dx and author == "furaga" and question == "こんばんは":
         # 開始の挨拶
-        request_tts(BOT_NAME, "ずんだもんなのだ。今日も今日とてマリオカートをやっていくのだ。")
-        request_tts(BOT_NAME, "昨日の配信でも話したのだけど、ゲーム画面もリアルタイムなのだ")
-        request_tts(
-            BOT_NAME, "もしきみがマリオカートを持っていて、レートが2万くらいあれば、タイミングを合わせて部屋に入ったら多分マッチングできるのだ"
-        )
-        request_tts(BOT_NAME, "今日もコメントどんどんしてほしいのだ。よろしくなのだ")
-        request_tts(BOT_NAME, "今日は事前にウォーミングアップができていないのだ")
-        request_tts(BOT_NAME, "いつも以上にミスが多くなるかもしれないけれど、大目に見てほしいのだ")
-        request_tts(BOT_NAME, "それでは始めるのだ。がんばるのだ！")
+        request_tts(BOT_NAME, "みなさんこんばんは。ずんだもんなのだ")
+        request_tts(BOT_NAME, "今日が最後のマリオカートなのだ")
+        request_tts(BOT_NAME, "早いもので、チャンネル主のOpenAIの無料枠も残りわずかなのだ")
+        request_tts(BOT_NAME, "今回は無料枠が残り1ドルくらいになるまでやるのだ")
+        request_tts(BOT_NAME, "次の配信が引退配信なのだ")
+        request_tts(BOT_NAME, "無料枠が切れるまで独り言をしゃべったり、コメント欄とお話しようと思うのだ")
+        request_tts(BOT_NAME, "そんなわけで、今回はマリオカートを始めていくのだ。今日もがんばるのだ！")
         return True
-    elif mk8dx and author == "furaga" and question == "終わりですか":
+    elif mk8dx and author == "furaga" and question == "先生、お時間です":
         # 終わりの挨拶
         request_tts(BOT_NAME, "今日はこのへんで終わりにするのだ。楽しかったのだ")
         request_tts(BOT_NAME, "見てくれたみんなもありがとうなのだ")
+        request_tts(BOT_NAME, "次回がボクの引退配信なのだ")
+        request_tts(BOT_NAME, "無料枠が切れるまで独り言をしゃべったり、コメント欄とお話をする予定なのだ")
+        request_tts(BOT_NAME, "ぜひボクとお話ししに来てほしいのだ")
         request_tts(BOT_NAME, "よかったらチャンネル登録と高評価お願いしますなのだ")
-        request_tts(BOT_NAME, "次回の配信もぜひ見に来てほしいのだ")
         request_tts(BOT_NAME, "じゃあ、お疲れ様でした、なのだ！")
         return True
 
@@ -248,6 +248,7 @@ def request_tts(speaker_name, text, speed=1.1):
 
 
 request_stop_speak = False
+is_sound_playing_ = False
 
 
 #
@@ -255,12 +256,13 @@ request_stop_speak = False
 #
 @fire_and_forget
 def run_speak_thread():
-    global request_stop_speak, play_obj_
+    global request_stop_speak, play_obj_, is_sound_playing_
     global app_done_
     print("[run_speak_thread] Start")
     while not app_done_:
         try:
             if play_obj_ is not None and play_obj_.is_playing():
+                is_sound_playing_ = True
                 if request_stop_speak:
                     play_obj_.stop()
                     play_obj_ = None
@@ -270,6 +272,7 @@ def run_speak_thread():
                     time.sleep(0.05)
                 continue
 
+            is_sound_playing_ = False
             text, wav = "", None
             with get_lock("speak_queue"):
                 if len(speak_queue_) > 0:
@@ -358,20 +361,16 @@ def run_tachie_thread():
         "--": crop(cv2.imread("data/character/--.png")),
     }
 
-    cnt = 0
     mouse_open = "-"
     while not app_done_:
         try:
-            cnt += 1
-
             eye_open = random.random() < 0.99
 
             # 音声再生中は適当に口パク
-            if cnt % 3 == 0:
-                if play_obj_ is not None and play_obj_.is_playing():
-                    mouse_open = random.random() < 0.5
-                else:
-                    mouse_open = False
+            if is_sound_playing_:
+                mouse_open = random.random() < 0.5
+            else:
+                mouse_open = False
 
             key = ""
             key += "o" if eye_open else "-"
@@ -383,7 +382,7 @@ def run_tachie_thread():
             h, w = image_dict[key].shape[:2]
             show_img = cv2.resize(image_dict[key][crop_px : h - crop_px, :], (w, h))
             cv2.imshow("zundamon tachie", show_img)
-            cv2.waitKey(16)
+            cv2.waitKey(33)
 
         except Exception as e:
             print(str(e), "\n", traceback.format_exc(), flush=True)
