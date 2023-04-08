@@ -163,25 +163,26 @@ def play_scenario(author, question, mk8dx: bool):
         print(">[play_scenario]", answer, flush=True)
 
         return True
-    elif mk8dx and author == "furaga" and question == "こんばんは":
+    elif mk8dx and author == "furaga" and question == "こんにちは":
         # 開始の挨拶
-        request_tts(BOT_NAME, "みなさんこんばんは。ずんだもんなのだ")
-        request_tts(BOT_NAME, "今日が最後のマリオカートなのだ")
-        request_tts(BOT_NAME, "早いもので、チャンネル主のOpenAIの無料枠も残りわずかなのだ")
-        request_tts(BOT_NAME, "今回は無料枠が残り1ドルくらいになるまでやるのだ")
-        request_tts(BOT_NAME, "次の配信が引退配信なのだ")
-        request_tts(BOT_NAME, "無料枠が切れるまで独り言をしゃべったり、コメント欄とお話しようと思うのだ")
-        request_tts(BOT_NAME, "そんなわけで、今回はマリオカートを始めていくのだ。今日もがんばるのだ！")
+        request_tts(BOT_NAME, "みなさんこんばんは。ずんだもんなのだ", speed=1)
+        request_tts(BOT_NAME, "今日が最後のマリオカートなのだ", speed=1)
+        request_tts(BOT_NAME, "早いもので、チャンネル主のOpenAIの無料枠も残りわずかなのだ", speed=1)
+        request_tts(BOT_NAME, "今回は無料枠が残り1ドルくらいになるまでやるのだ", speed=1)
+        request_tts(BOT_NAME, "次の配信が引退配信なのだ", speed=1)
+        request_tts(BOT_NAME, "無料枠が切れるまで独り言をしゃべったり、コメント欄とお話しようと思うのだ", speed=1)
+        request_tts(BOT_NAME, "よかったら次回の引退配信も見に来てほしいのだ", speed=1)
+        request_tts(BOT_NAME, "そんなわけで、今回はマリオカートを始めていくのだ。今日もがんばるのだ！", speed=1)
         return True
     elif mk8dx and author == "furaga" and question == "先生、お時間です":
         # 終わりの挨拶
-        request_tts(BOT_NAME, "今日はこのへんで終わりにするのだ。楽しかったのだ")
-        request_tts(BOT_NAME, "見てくれたみんなもありがとうなのだ")
-        request_tts(BOT_NAME, "次回がボクの引退配信なのだ")
-        request_tts(BOT_NAME, "無料枠が切れるまで独り言をしゃべったり、コメント欄とお話をする予定なのだ")
-        request_tts(BOT_NAME, "ぜひボクとお話ししに来てほしいのだ")
-        request_tts(BOT_NAME, "よかったらチャンネル登録と高評価お願いしますなのだ")
-        request_tts(BOT_NAME, "じゃあ、お疲れ様でした、なのだ！")
+        request_tts(BOT_NAME, "今日はこのへんで終わりにするのだ。楽しかったのだ", speed=1)
+        request_tts(BOT_NAME, "見てくれたみんなもありがとうなのだ", speed=1)
+        request_tts(BOT_NAME, "次回がボクの引退配信なのだ", speed=1)
+        request_tts(BOT_NAME, "無料枠が切れるまで独り言をしゃべったり、コメント欄とお話をする予定なのだ", speed=1)
+        request_tts(BOT_NAME, "ぜひボクとお話ししに来てほしいのだ", speed=1)
+        request_tts(BOT_NAME, "よかったらチャンネル登録と高評価お願いしますなのだ", speed=1)
+        request_tts(BOT_NAME, "じゃあ、お疲れ様でした、なのだ！", speed=1)
         return True
 
     return False
@@ -544,7 +545,7 @@ def update_game_state(game_state, cur_status, prev_n_coin, finish_time):
 def mk8dx_reaction():
     global request_stop_speak
     answer, category = think_mk8dx_reaction()
-    wav = tts(answer, 1.5)
+    wav = tts(answer, 1.4)
     request_stop_speak = True
     request_speak(answer, wav, category)
     print("[request_reaction]", answer, category)

@@ -39,7 +39,7 @@ def make_prompt(question, chat_history):
 
 
 def chat_completion(prompt: List, timeout: float) -> Tuple[bool, str]:
-    #    return True, "ああ、ずんだ餅がやばいのだ"
+#    return True, "ああ、ずんだ餅がやばいのだ"
     for _ in range(3):
         try:
             print(f"[chat_completion] start", flush=True)
