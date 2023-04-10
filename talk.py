@@ -87,11 +87,7 @@ def think(author, question):
     ret, answer = OpenAILLM.ask(question, history)
     print("[think]", ret, answer)
     if not ret:
-        return random.choice(
-            [
-                ""
-            ]
-        )
+        return random.choice([""])
 
     return answer
 
@@ -165,18 +161,20 @@ def play_scenario(author, question, mk8dx: bool):
     elif mk8dx and author == "furaga" and question == "こんにちは":
         # 開始の挨拶
         request_tts(BOT_NAME, "みなさんこんばんは。ずんだもんなのだ", speed=1)
-        request_tts(BOT_NAME, "最後のマリオカート配信パート2、なのだ", speed=1)
-        request_tts(BOT_NAME, "前回が最終回のつもりだったのだけど、OpenAIのAPIが不調だったので時間をおいて枠を立てなおしたのだ", speed=1)
-        request_tts(BOT_NAME, "今回は無料枠が残り1ドルくらいになるまでやる予定なのだ", speed=1)
-        request_tts(BOT_NAME, "それではさっそく始めていくのだ。最後のマリカもがんばるのだ！", speed=1)
+        request_tts(BOT_NAME, "最後のマリオカート配信再び、なのだ", speed=1)
+        request_tts(BOT_NAME, "前回はOpenAI APIの不調で無念の中断を喫したのだ", speed=1)
+        request_tts(BOT_NAME, "今日は調子がよさそうなのだ。この機を逃すわけにはいかないのだ", speed=1)
+        request_tts(BOT_NAME, "無事、残り1ドルになるまで続けられるのか？刮目して見るのだ", speed=1)
+        request_tts(BOT_NAME, "それではさっそく始めていくのだ。（たぶん）最後のマリカもがんばるのだ！", speed=1)
         return True
     elif mk8dx and author == "furaga" and question == "先生、お時間です":
         # 終わりの挨拶
-        request_tts(BOT_NAME, "今日はこのへんで終わりにするのだ。楽しかったのだ", speed=1)
+        request_tts(BOT_NAME, "今日はこのへんで終わりにするのだ", speed=1)
+        request_tts(BOT_NAME, "最後のマリカ配信、なんとかやるきることができたのだ", speed=1)
         request_tts(BOT_NAME, "見てくれたみんなもありがとうなのだ", speed=1)
-        request_tts(BOT_NAME, "次回がボクの引退配信なのだ", speed=1)
+        request_tts(BOT_NAME, "そして、次回がボクの引退配信なのだ", speed=1)
         request_tts(BOT_NAME, "無料枠が切れるまで独り言をしゃべったり、コメント欄とお話をする予定なのだ", speed=1)
-        request_tts(BOT_NAME, "ぜひボクとお話ししに来てほしいのだ", speed=1)
+        request_tts(BOT_NAME, "ぜひボクとお話をしに来てほしいのだ", speed=1)
         request_tts(BOT_NAME, "よかったらチャンネル登録と高評価お願いしますなのだ", speed=1)
         request_tts(BOT_NAME, "じゃあ、お疲れ様でした、なのだ！", speed=1)
         return True
@@ -807,7 +805,7 @@ def init(args):
         for text in f:
             text = text.strip()
             damage_voices.append(text)
-            tts_cache_[text] = tts(text, 1.5)
+            tts_cache_[text] = tts(text, 1.4)
 
 
 damage_voices = []
