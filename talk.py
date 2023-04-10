@@ -120,7 +120,8 @@ def think_mk8dx(status):
 
 # ランダムで流す独白
 def think_monologues():
-    return random.choice(all_monologues_)
+    return think("", "50文字以内でひとりごとを話してください")
+    # return random.choice(all_monologues_)
 
 
 # 決め打ちのセリフ・処理
@@ -158,7 +159,7 @@ def play_scenario(author, question, mk8dx: bool):
         print(">[play_scenario]", answer, flush=True)
 
         return True
-    elif mk8dx and author == "furaga" and question == "こんにちは":
+    elif mk8dx and author == "furaga" and question == "やあやあ":
         # 開始の挨拶
         request_tts(BOT_NAME, "みなさんこんばんは。ずんだもんなのだ", speed=1)
         request_tts(BOT_NAME, "最後のマリオカート配信再び、なのだ", speed=1)
@@ -372,6 +373,7 @@ def run_tachie_thread():
             key += "o" if mouse_open else "-"
 
             t = time.time() * np.pi * 2 * 0.2
+            t = 0 # time.time() * np.pi * 2 * 0.2
             crop_px = int(15 * (1 + np.sin(t)) / 2)
 
             h, w = image_dict[key].shape[:2]
@@ -723,7 +725,7 @@ def run_chatbot_thread():
                 continue
 
             # 一定時間なにもコメントがなかったら独白
-            if not ret and not is_mk8dx_mode_ and time.time() - prev_listen_time > 45:
+            if not ret and not is_mk8dx_mode_ and time.time() - prev_listen_time > 10:
                 monologue = think_monologues()
                 request_tts(BOT_NAME, monologue)
                 prev_listen_time = time.time()
@@ -732,7 +734,6 @@ def run_chatbot_thread():
 
             # コメントがなかったら、もう一度ループ
             if not ret:
-                prev_listen_time = time.time()
                 time.sleep(0.1)
                 continue
 
@@ -781,7 +782,8 @@ def init(args):
     youtube_chat_ = pytchat.create(video_id=args.chat_video_id)
 
     # openai
-    OpenAILLM.init(Path("data/config/mk8dx/prompt.json"))
+    # OpenAILLM.init(Path("data/config/mk8dx/prompt.json"))
+    OpenAILLM.init(Path("data/config/normal/prompt.json"))
 
     # obs
     OBS.init(args.obs_pass)
