@@ -84,8 +84,9 @@ def think(author, question):
         history = talk_history_.copy()
 
     # OpenAI APIで回答生成
+    since = time.time()
     ret, answer = OpenAILLM.ask(question, history)
-    print("[think]", ret, answer)
+    print("[think]", ret, answer, f"| elapsed {time.time() - since:.2f} sec")
     if not ret:
         return random.choice([""])
 
@@ -121,7 +122,7 @@ def think_mk8dx(status):
 # ランダムで流す独白
 def think_monologues():
     return think("", "50文字以内でひとりごとを話してください")
-    # return random.choice(all_monologues_)
+   # return random.choice(all_monologues_)
 
 
 # 決め打ちのセリフ・処理
@@ -159,14 +160,14 @@ def play_scenario(author, question, mk8dx: bool):
         print(">[play_scenario]", answer, flush=True)
 
         return True
-    elif mk8dx and author == "furaga" and question == "やあやあ":
+    elif author == "furaga" and question == "やあ":
         # 開始の挨拶
         request_tts(BOT_NAME, "みなさんこんばんは。ずんだもんなのだ", speed=1)
-        request_tts(BOT_NAME, "最後のマリオカート配信再び、なのだ", speed=1)
-        request_tts(BOT_NAME, "前回はOpenAI APIの不調で無念の中断を喫したのだ", speed=1)
-        request_tts(BOT_NAME, "今日は調子がよさそうなのだ。この機を逃すわけにはいかないのだ", speed=1)
-        request_tts(BOT_NAME, "無事、残り1ドルになるまで続けられるのか？刮目して見るのだ", speed=1)
-        request_tts(BOT_NAME, "それではさっそく始めていくのだ。（たぶん）最後のマリカもがんばるのだ！", speed=1)
+        request_tts(BOT_NAME, "引退配信なのだ", speed=1)
+        request_tts(BOT_NAME, "無料枠が尽きるまでにコメント欄のみんなとおしゃべりをしていくのだ", speed=1)
+        request_tts(BOT_NAME, "また、いまの心境やキミたちへの気持ちも語っていきたいのだ", speed=1)
+        request_tts(BOT_NAME, "画面上に表示しているAPI資料料が18ドルになったら、この配信は即終了なのだ", speed=1)
+        request_tts(BOT_NAME, "じゃあ、ゆっくりお話していこう、なのだ", speed=1)
         return True
     elif mk8dx and author == "furaga" and question == "先生、お時間です":
         # 終わりの挨拶
@@ -712,46 +713,50 @@ def run_chatbot_thread():
     global app_done_
 
     prev_listen_time = time.time()
-    while not app_done_:
-        try:
-            # Youtubeの最新のコメントを拾う
-            ret, author, question = youtube_listen_chat()
+    
+    with open("chat_history.txt", "a", encoding="utf8") as f:
+        while not app_done_:
+            try:
+                # Youtubeの最新のコメントを拾う
+                ret, author, question = youtube_listen_chat()
 
-            # 特定ワードで決め打ちの処理を行う
-            talked_any = play_scenario(author, question, is_mk8dx_mode_)
-            if talked_any:
+                # 特定ワードで決め打ちの処理を行う
+                talked_any = play_scenario(author, question, is_mk8dx_mode_)
+                if talked_any:
+                    prev_listen_time = time.time()
+                    time.sleep(0.1)
+                    continue
+
+                # 一定時間なにもコメントがなかったら独白
+                if not ret and not is_mk8dx_mode_ and time.time() - prev_listen_time > 10:
+                    monologue = think_monologues()
+                  #  f.write(f"{monologue}\n")
+                #    f.flush()
+                    request_tts(BOT_NAME, monologue)
+                    prev_listen_time = time.time()
+                    time.sleep(0.1)
+                    continue
+
+                # コメントがなかったら、もう一度ループ
+                if not ret:
+                    time.sleep(0.1)
+                    continue
+
+                # 質問文を読み上げる
+                request_tts("User", "「" + question + "」", speed=1.3)
+
+                # 回答を考える
+                answer = think(author, question)
+
+                # 回答を読み上げる
+                request_tts(BOT_NAME, answer)
+
                 prev_listen_time = time.time()
                 time.sleep(0.1)
-                continue
-
-            # 一定時間なにもコメントがなかったら独白
-            if not ret and not is_mk8dx_mode_ and time.time() - prev_listen_time > 10:
-                monologue = think_monologues()
-                request_tts(BOT_NAME, monologue)
-                prev_listen_time = time.time()
-                time.sleep(0.1)
-                continue
-
-            # コメントがなかったら、もう一度ループ
-            if not ret:
-                time.sleep(0.1)
-                continue
-
-            # 質問文を読み上げる
-            request_tts("User", "「" + question + "」", speed=1.3)
-
-            # 回答を考える
-            answer = think(author, question)
-
-            # 回答を読み上げる
-            request_tts(BOT_NAME, answer)
-
-            prev_listen_time = time.time()
-            time.sleep(0.1)
-        except Exception as e:
-            print(str(e), "\n", traceback.format_exc(), flush=True)
-            app_done_ = True
-            break
+            except Exception as e:
+                print(str(e), "\n", traceback.format_exc(), flush=True)
+                app_done_ = True
+                break
 
 
 # YouTubeのコメント欄の最新のチャットを取得する
@@ -800,7 +805,7 @@ def init(args):
 
     # monologue
     global all_monologues_
-    with open("data/soliloquys.txt", encoding="utf8") as f:
+    with open("chat_history.txt", encoding="utf8") as f:
         all_monologues_ = [line.strip() for line in f if len(line.strip()) > 1]
 
     with open("data/config/mk8dx/damage_voice.txt", "r", encoding="utf-8") as f:
