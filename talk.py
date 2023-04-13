@@ -121,13 +121,16 @@ def think_mk8dx(status):
 
 # ランダムで流す独白
 def think_monologues():
+
     return think("", "50文字以内でひとりごとを話してください")
    # return random.choice(all_monologues_)
 
+enable_monologue_ = False
 
 # 決め打ちのセリフ・処理
 def play_scenario(author, question, mk8dx: bool):
     global mk8dx_spoken_result_, mk8dx_detected_final_place_
+    global enable_monologue_
     if mk8dx and author == "furaga" and question == "nf":
         # リセットだけさせたい
         print(">[play_scenario] nf", flush=True)
@@ -160,7 +163,7 @@ def play_scenario(author, question, mk8dx: bool):
         print(">[play_scenario]", answer, flush=True)
 
         return True
-    elif author == "furaga" and question == "やあ":
+    elif author == "furaga" and question == "おはよう":
         # 開始の挨拶
         request_tts(BOT_NAME, "みなさんこんばんは。ずんだもんなのだ", speed=1)
         request_tts(BOT_NAME, "引退配信なのだ", speed=1)
@@ -168,6 +171,8 @@ def play_scenario(author, question, mk8dx: bool):
         request_tts(BOT_NAME, "また、いまの心境やキミたちへの気持ちも語っていきたいのだ", speed=1)
         request_tts(BOT_NAME, "画面上に表示しているAPI資料料が18ドルになったら、この配信は即終了なのだ", speed=1)
         request_tts(BOT_NAME, "じゃあ、ゆっくりお話していこう、なのだ", speed=1)
+        time.sleep(30)
+        enable_monologue_ = True
         return True
     elif mk8dx and author == "furaga" and question == "先生、お時間です":
         # 終わりの挨拶
@@ -233,7 +238,7 @@ def tts(text, speed=1.1, speaker=3):
     return res2.content
 
 
-def request_tts(speaker_name, text, speed=1.1):
+def request_tts(speaker_name, text, speed=1.0):
     global talk_history_
     with get_lock("talk_history"):
         talk_history_.append({"role": "system", "content": f"{speaker_name}: {text}"})
@@ -728,9 +733,10 @@ def run_chatbot_thread():
                     continue
 
                 # 一定時間なにもコメントがなかったら独白
+                #if enable_monologue_:
                 if not ret and not is_mk8dx_mode_ and time.time() - prev_listen_time > 10:
                     monologue = think_monologues()
-                  #  f.write(f"{monologue}\n")
+                #  f.write(f"{monologue}\n")
                 #    f.flush()
                     request_tts(BOT_NAME, monologue)
                     prev_listen_time = time.time()
@@ -743,7 +749,7 @@ def run_chatbot_thread():
                     continue
 
                 # 質問文を読み上げる
-                request_tts("User", "「" + question + "」", speed=1.3)
+                request_tts("User", "「" + question + "」", speed=1.1)
 
                 # 回答を考える
                 answer = think(author, question)
@@ -796,6 +802,8 @@ def init(args):
         "ブラウザ 2",
         f"https://www.youtube.com/live_chat?is_popout=1&v={args.chat_video_id}",
     )
+
+    OBS.set_text("zundamon_zimaku", "")
 
     # mk8dx
     is_mk8dx_mode_ = args.mk8dx

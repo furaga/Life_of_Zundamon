@@ -115,7 +115,7 @@ def chat_completion_postprocess(content: str) -> str:
     return content
 
 
-def ask(text: str, chat_history: List, timeout: float = 8) -> Tuple[bool, str]:
+def ask(text: str, chat_history: List, timeout: float = 12) -> Tuple[bool, str]:
     text = re.sub("<@.+>", "", text)
     prompt = make_prompt(text, chat_history)
     ret, content = chat_completion(prompt, timeout)
@@ -240,10 +240,10 @@ if __name__ == "__main__":
             ret, answer = ask(prompt, [])
             print("Answer(ask              ):", ret, answer)
 
-            ret, answer = ask_mk8dx(5, 3, "キラー", "スター", "10", [], True)
-            print("Answer(ask_mk8dx, race  ):", ret, answer)
+            # ret, answer = ask_mk8dx(5, 3, "キラー", "スター", "10", [], True)
+            # print("Answer(ask_mk8dx, race  ):", ret, answer)
 
-            ret, answer = ask_mk8dx(0, 0, "", "", "1", [], False)
-            print("Answer(ask_mk8dx, result):", ret, answer)
+            # ret, answer = ask_mk8dx(0, 0, "", "", "1", [], False)
+            # print("Answer(ask_mk8dx, result):", ret, answer)
 
     main()
